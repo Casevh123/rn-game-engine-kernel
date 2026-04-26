@@ -6,8 +6,8 @@
   "scripts": {
     "build": "tsc"
   },
-  "dependencies": {},
   "devDependencies": {
+    "jest": "^30.3.0",
     "typescript": "^5.5.3"
   },
   "private": true
