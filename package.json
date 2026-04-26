@@ -4,11 +4,14 @@
   "description": "",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "test": "jest"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "jest": "^30.3.0",
-    "typescript": "^5.5.3"
+    "ts-jest": "^29.4.9",
+    "typescript": "^5.9.3"
   },
   "private": true
 }
