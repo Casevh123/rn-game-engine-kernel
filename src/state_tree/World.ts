@@ -2,12 +2,14 @@ import TreeNode from "./Node";
 
 export class World {
     readonly root: TreeNode;
+    private _nodesById: Map<string, TreeNode> = new Map();
 
     constructor() {
         this.root = new TreeNode("root");
+        this._nodesById.set("root", this.root);
     }
 
-    isAncestor(possibleAncestor: TreeNode, node: TreeNode): boolean {
+    private isAncestor(possibleAncestor: TreeNode, node: TreeNode): boolean {
         let current: TreeNode | null = node.parent;
 
         while (current !== null) {
@@ -18,7 +20,43 @@ export class World {
         return false;
     }
 
+    private owns(node: TreeNode): boolean {
+        return this._nodesById.get(node.id) === node;
+    }
+
+    private removeSubtree(node: TreeNode): void {
+        for (const child of node.children) {
+            this.removeSubtree(child);
+        }
+
+        this._nodesById.delete(node.id);
+    }
+
+    private addSubtree(node: TreeNode): void {
+        if (this._nodesById.has(node.id)) {
+            throw new Error("Duplicate id in subtree")
+        }
+
+        this._nodesById.set(node.id, node)
+
+        for (const child of node.children) {
+            this.addSubtree(child)
+        }
+    }
+
+    getNode(id: string) {
+        return this._nodesById.get(id) ?? null;
+    }
+
+    hasNode(id: string) {
+        return this._nodesById.has(id);
+    }
+
     attach(parent: TreeNode, child: TreeNode) {
+        if (!this.owns(parent)) {
+            throw new Error("Parent must already exist in this world")
+        }
+
         if (child.id === "root") {
             throw new Error("Cannot attach root as child");
         }
@@ -27,24 +65,39 @@ export class World {
             throw new Error("Cannot attach node that already has a a parent, use reparent instead");
         }
 
-        if (this.isAncestor(child, parent)) {
-            throw new Error("Cannot create cycle");
+        if (this._nodesById.has(child.id)) {
+            throw new Error("Cannot attach node because id already exists in this tree")
         }
 
+        this.addSubtree(child);
         child.setParent(parent);
         parent.addChild(child);
     }
 
 
-    detach(child: TreeNode) {
-        if (child.parent === null) {
-            throw new Error("Cannot detach child because it has no parent");
+    detach(node: TreeNode) {
+        if (!this.owns(node)) {
+            throw new Error("Node must belong to this world");
         }
-        child.parent.removeChild(child);
-        child.setParent(null);
+
+        if (node.id === "root") {
+            throw new Error("Cannot detach root");
+        }
+
+        if (node.parent === null) {
+            throw new Error("Cannot detach node if it has no parent");
+        }
+
+        node.parent.removeChild(node);
+        node.setParent(null);
+        this.removeSubtree(node);
     }
 
     destroy(node: TreeNode) {
+        if (!this.owns(node)) {
+            throw new Error("Node must belong to this world");
+        }
+
         if (node.id === "root") {
             throw new Error("Cannot destroy root");
         }
@@ -58,9 +111,18 @@ export class World {
         }
 
         node.setParent(null);
+        this._nodesById.delete(node.id);
     }
 
     reparent(node: TreeNode, parent: TreeNode) {
+        if (!this.owns(node)) {
+            throw new Error("Node must belong to this world");
+        }
+
+        if (!this.owns(parent)) {
+            throw new Error("Parent must belong to this world");
+        }
+
         if (node.id === "root") {
             throw new Error("Cannot reparent root as child");
         }
