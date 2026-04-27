@@ -3,9 +3,8 @@ import TreeNode from "../state_tree/Node";
 describe('node', () => {
     it('has needs an id', () => {
         // Throws an error without an id
-        expect(() => {
-            new (TreeNode as any)();
-        }).toThrow();
+        expect(() => new TreeNode("")).toThrow();
+        expect(() => new TreeNode(null as any)).toThrow();
 
         // Works with an id
         let node: TreeNode = new TreeNode("hi");
