@@ -1,7 +1,7 @@
 import TreeNode from "../state_tree/Node";
 
 describe('node', () => {
-    it('has needs an id', () => {
+    it('needs an id', () => {
         // Throws an error without an id
         expect(() => new TreeNode("")).toThrow();
         expect(() => new TreeNode(null as any)).toThrow();
@@ -23,7 +23,7 @@ describe('node', () => {
         expect(node.children.length).toBe(0);
     })
 
-    it('cannot mutate internal child array from getter return', () => {
+    it('get children return copy not internal array', () => {
         let parent: TreeNode = new TreeNode("parent");
         let child: TreeNode = new TreeNode("child");
 
