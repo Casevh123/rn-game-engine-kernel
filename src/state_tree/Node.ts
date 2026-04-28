@@ -1,4 +1,3 @@
-import {UpdateContext} from "./World";
 import {Component} from "./Component";
 
 export default class TreeNode {

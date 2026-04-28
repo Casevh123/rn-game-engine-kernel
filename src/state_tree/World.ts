@@ -9,6 +9,21 @@ export class World {
         this._nodesById.set("root", this.root);
     }
 
+    traversePreOrder(): TreeNode[] {
+        const result: TreeNode[] = [];
+
+        const visit = (node: TreeNode) => {
+            result.push(node);
+
+            for (const child of node.children) {
+                visit(child);
+            }
+        };
+
+        visit(this.root);
+        return result;
+    }
+
     private isAncestor(possibleAncestor: TreeNode, node: TreeNode): boolean {
         let current: TreeNode | null = node.parent;
 
