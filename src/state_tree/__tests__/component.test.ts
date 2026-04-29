@@ -1,5 +1,5 @@
-import {Component} from "../state_tree/Component";
-import TreeNode from "../state_tree/Node";
+import {Component} from "../Component";
+import TreeNode from "../Node";
 
 describe('component', () => {
     class Health extends Component {

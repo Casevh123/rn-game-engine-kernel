@@ -1,6 +1,6 @@
-import {Command, CommandBuffer, CommandBus} from "../state_tree/CommandBus";
-import {World} from "../state_tree/World";
-import TreeNode from "../state_tree/Node";
+import {Command, CommandBuffer, CommandBus} from "../CommandBus";
+import {World} from "../World";
+import TreeNode from "../Node";
 
 describe('command test', () => {
     it('can enqueue commands', () => {

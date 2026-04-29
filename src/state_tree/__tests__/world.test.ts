@@ -1,5 +1,5 @@
-import {World} from "../state_tree/World";
-import TreeNode from "../state_tree/Node";
+import {World} from "../World";
+import TreeNode from "../Node";
 
 describe('world', () => {
     it('creates root', () => {

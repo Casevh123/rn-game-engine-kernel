@@ -1,7 +1,7 @@
-import {Component} from "../state_tree/Component";
-import {UpdateContext} from "../state_tree/types";
-import {World} from "../state_tree/World";
-import TreeNode from "../state_tree/Node";
+import {Component} from "../Component";
+import {UpdateContext} from "../types";
+import {World} from "../World";
+import TreeNode from "../Node";
 
 describe('Counter', () => {
     class Counter extends Component {

@@ -1,4 +1,4 @@
-import TreeNode from "../state_tree/Node";
+import TreeNode from "../Node";
 
 describe('node', () => {
     it('needs an id', () => {
