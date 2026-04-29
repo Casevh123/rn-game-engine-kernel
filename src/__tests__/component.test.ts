@@ -16,6 +16,12 @@ describe('component', () => {
         }
     }
 
+    class Magic extends Component {
+        constructor(public mana: number) {
+            super()
+        }
+    }
+
     it('adding a component updates component reference and adds component', () => {
         const node: TreeNode = new TreeNode("node");
         const health: Health = new Health(10);
@@ -28,20 +34,27 @@ describe('component', () => {
     it('node can retrieve component by type', () => {
         const node: TreeNode = new TreeNode("node");
         const health: Health = new Health(10);
+        const magic: Magic = new Magic(20);
 
         node.addComponent<Health>(health);
+        node.addComponent<Magic>(magic);
         expect(node.getComponent<Health>(Health)).toBe(health);
+        expect(node.getComponent<Magic>(Magic)).toBe(magic);
     })
 
     it('returns undefined for missing component', () => {
         const node: TreeNode = new TreeNode("node");
+        const magic: Magic = new Magic(20);
+
+        node.addComponent<Magic>(magic);
 
         expect(node.getComponent<Health>(Health)).toBeUndefined();
     })
 
-    it('calls on attach when attached', () => {
+    it('calls on attach when attached and doesnt break if a component doesnt have onattach', () => {
         const node: TreeNode = new TreeNode("node");
         const health: Health = new Health(10);
+        const magic: Magic = new Magic(20);
 
         expect(health.hp).toBe(10);
         node.addComponent<Health>(health);
@@ -57,6 +70,14 @@ describe('component', () => {
         components.pop()
         expect(components.length).toBe(0);
         expect(node.components).toContain(health);
+    })
+
+    it('addComponent returns the component instance', () => {
+        const node = new TreeNode("node");
+        const health = new Health(10);
+
+        const returned = node.addComponent(health);
+        expect(returned).toBe(health);
     })
 
     it('does not allow duplicate components of the same type', () => {

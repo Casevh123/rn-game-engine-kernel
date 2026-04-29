@@ -1,7 +1,6 @@
 import TreeNode from "./Node";
 import {UpdateContext} from "./types";
 import {CommandBuffer, CommandBus} from "./CommandBus";
-import {Component} from "./Component";
 
 export class World {
     readonly root: TreeNode;
@@ -18,10 +17,12 @@ export class World {
         const result: TreeNode[] = [];
 
         const visit = (node: TreeNode) => {
-            result.push(node);
+            if (node.enabled) {
+                result.push(node);
 
-            for (const child of node.children) {
-                visit(child);
+                for (const child of node.children) {
+                    visit(child);
+                }
             }
         };
 
@@ -37,10 +38,8 @@ export class World {
         };
 
         for (const node of this.traversePreOrder()) {
-            if (node.enabled) {
-                for (const component of node.components) {
-                    component.update?.(ctx)
-                }
+            for (const component of node.components) {
+                component.update?.(ctx)
             }
         }
 
@@ -173,9 +172,31 @@ export class World {
             throw new Error("Cannot create cycle");
         }
 
+        if (node === parent) {
+            throw new Error("Cannot attach a node to itself")
+        }
+
         node.parent.removeChild(node);
         node.setParent(parent);
         parent.addChild(node);
+    }
+
+    /**
+     * @internal
+     *
+     * This method is here for testing purposes
+     */
+    get commandBuffer(): CommandBuffer {
+        return this._commandBuffer;
+    }
+
+    /**
+     * @internal
+     *
+     * This method is here for testing purposes
+     */
+    get commandBus(): CommandBus {
+        return this._commandBus;
     }
 }
 

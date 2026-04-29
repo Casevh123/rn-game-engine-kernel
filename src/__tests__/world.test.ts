@@ -55,6 +55,15 @@ describe('mutation', () => {
 
             expect(() => world.attach(parent, child)).toThrow("Parent must already exist in this world");
         })
+
+        it('cannot reparent a node to itself', () => {
+            const world: World = new World();
+            const root: TreeNode = world.root;
+            const node1: TreeNode = new TreeNode("node1");
+
+            world.attach(root, node1);
+            expect(() => world.reparent(node1, node1)).toThrow("Cannot attach a node to itself");
+        })
     })
 
     describe('detach', () => {
@@ -82,6 +91,16 @@ describe('mutation', () => {
             const world: World = new World();
 
             expect(() => world.detach(world.root)).toThrow("Cannot detach root");
+        })
+
+        it('cannot detach a node that has no parent', () => {
+            const world: World = new World();
+            const child: TreeNode = new TreeNode("child");
+
+            world.attach(world.root, child);
+            child.setParent(null);
+
+            expect(() => world.detach(child)).toThrow("Cannot detach node if it has no parent");
         })
     })
 
@@ -189,6 +208,12 @@ describe('node lookup', () => {
     it('puts root in lookup', () => {
         const world: World = new World();
         expect(world.hasNode("root")).toBe(true);
+    })
+
+    it('getNode returns null if there is no node', () => {
+        const world: World = new World();
+
+        expect(world.getNode("1")).toBeNull();
     })
 
     it('puts attached child in lookup', () => {

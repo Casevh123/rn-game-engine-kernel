@@ -59,6 +59,40 @@ describe("traversal", () => {
         expect(traversalIds).toEqual(['root', 'A', 'C', 'D', 'B', 'E']);
     })
 
+    it('skips disabled nodes', () => {
+        const world: World = new World();
+        const root: TreeNode = world.root;
+        const nodeA: TreeNode = new TreeNode("A");
+        const nodeB: TreeNode = new TreeNode("B");
+
+        world.attach(root, nodeA);
+        world.attach(root, nodeB);
+        nodeA.enabled = false;
+        const traversal: TreeNode[] = world.traversePreOrder();
+        const traversalIds: string[] = traversal.map(node => node.id);
+
+        expect(traversalIds).toEqual(['root', 'B']);
+    })
+
+    it('skips the children of disabled nodes', () => {
+        const world: World = new World();
+        const root: TreeNode = world.root;
+        const nodeA: TreeNode = new TreeNode("A");
+        const nodeB: TreeNode = new TreeNode("B");
+        const nodeC: TreeNode = new TreeNode("C");
+        const nodeD: TreeNode = new TreeNode("D");
+
+        world.attach(root, nodeA);
+        world.attach(root, nodeB);
+        world.attach(nodeA, nodeC);
+        world.attach(nodeB, nodeD);
+        nodeA.enabled = false;
+        const traversal: TreeNode[] = world.traversePreOrder();
+        const traversalIds: string[] = traversal.map(node => node.id);
+
+        expect(traversalIds).toEqual(['root', 'B', 'D']);
+    })
+
     it('is deterministic accross multiple calls', () => {
         const world: World = new World();
         const root: TreeNode = world.root;

@@ -1,4 +1,6 @@
-import {Command, CommandBus} from "../state_tree/CommandBus";
+import {Command, CommandBuffer, CommandBus} from "../state_tree/CommandBus";
+import {World} from "../state_tree/World";
+import TreeNode from "../state_tree/Node";
 
 describe('command test', () => {
     it('can enqueue commands', () => {
@@ -54,5 +56,119 @@ describe('command test', () => {
         const bus: CommandBus = new CommandBus();
 
         expect(() => bus.flush()).not.toThrow();
+    })
+})
+
+describe('command buffer', () => {
+    it('doesnt execute attach immediately', () => {
+        const world: World = new World();
+        const root: TreeNode = world.root;
+        const node: TreeNode = new TreeNode('1');
+        const buffer: CommandBuffer = world.commandBuffer;
+
+        buffer.attach(root, node);
+        expect(node.parent).toBeNull();
+        expect(root.children).not.toContain(node)
+
+    })
+
+    it('executes attach after flush', () => {
+        const world: World = new World();
+        const root: TreeNode = world.root;
+        const node: TreeNode = new TreeNode('1');
+        const buffer: CommandBuffer = world.commandBuffer;
+        const bus: CommandBus = world.commandBus;
+
+        buffer.attach(root, node);
+        bus.flush();
+        expect(node.parent).toBe(root);
+        expect(root.children).toContain(node);
+    })
+
+    it('doesnt execute detach immediately', () => {
+        const world: World = new World();
+        const root: TreeNode = world.root;
+        const node: TreeNode = new TreeNode('1');
+        const buffer: CommandBuffer = world.commandBuffer;
+
+        world.attach(root, node);
+        buffer.detach(node);
+        expect(node.parent).toBe(root);
+        expect(root.children).toContain(node);
+    })
+
+    it('executes detach after flush', () => {
+        const world: World = new World();
+        const root: TreeNode = world.root;
+        const node: TreeNode = new TreeNode('1');
+        const buffer: CommandBuffer = world.commandBuffer;
+        const bus: CommandBus = world.commandBus;
+
+        world.attach(root, node);
+        buffer.detach(node);
+        bus.flush();
+        expect(node.parent).toBeNull();
+        expect(root.children).not.toContain(node);
+    })
+
+    it('doesnt execute destroy immediately', () => {
+        const world: World = new World();
+        const root: TreeNode = world.root;
+        const node: TreeNode = new TreeNode('1');
+        const buffer: CommandBuffer = world.commandBuffer;
+
+        world.attach(root, node);
+        buffer.destroy(node);
+        expect(node.parent).toBe(root);
+        expect(root.children).toContain(node);
+    })
+
+    it('executes destroy after flush', () => {
+        const world: World = new World();
+        const root: TreeNode = world.root;
+        const node: TreeNode = new TreeNode('1');
+        const buffer: CommandBuffer = world.commandBuffer;
+        const bus: CommandBus = world.commandBus;
+
+        world.attach(root, node);
+        buffer.destroy(node);
+        bus.flush();
+        expect(node.parent).toBeNull();
+        expect(root.children).not.toContain(node);
+    })
+
+    it('doesnt execute reparent immediately', () => {
+        const world: World = new World();
+        const root: TreeNode = world.root;
+        const node1: TreeNode = new TreeNode('1');
+        const node2: TreeNode = new TreeNode('2');
+        const buffer: CommandBuffer = world.commandBuffer;
+
+        world.attach(root, node1);
+        world.attach(node1, node2);
+        buffer.reparent(node2, root);
+
+        expect(node2.parent).toBe(node1);
+        expect(node1.children).toContain(node2);
+        expect(root.children).not.toContain(node2);
+
+    })
+
+    it('executes reparent after flush', () => {
+        const world: World = new World();
+        const root: TreeNode = world.root;
+        const node1: TreeNode = new TreeNode('1');
+        const node2: TreeNode = new TreeNode('2');
+        const buffer: CommandBuffer = world.commandBuffer;
+        const bus: CommandBus = world.commandBus;
+
+        world.attach(root, node1);
+        world.attach(node1, node2);
+        buffer.reparent(node2, root);
+        bus.flush();
+
+        expect(node2.parent).toBe(root);
+        expect(node1.children).not.toContain(node2);
+        expect(root.children).toContain(node2);
     })
 })
