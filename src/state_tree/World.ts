@@ -1,8 +1,13 @@
 import TreeNode from "./Node";
+import {UpdateContext} from "./types";
+import {CommandBuffer, CommandBus} from "./CommandBus";
+import {Component} from "./Component";
 
 export class World {
     readonly root: TreeNode;
     private _nodesById: Map<string, TreeNode> = new Map();
+    private _commandBus: CommandBus = new CommandBus();
+    private _commandBuffer: CommandBuffer = new CommandBuffer(this, this._commandBus);
 
     constructor() {
         this.root = new TreeNode("root");
@@ -22,6 +27,24 @@ export class World {
 
         visit(this.root);
         return result;
+    }
+
+    update(dt: number): void {
+        const ctx: UpdateContext = {
+            world: this,
+            commands: this._commandBuffer,
+            dt,
+        };
+
+        for (const node of this.traversePreOrder()) {
+            if (node.enabled) {
+                for (const component of node.components) {
+                    component.update?.(ctx)
+                }
+            }
+        }
+
+        this._commandBus.flush()
     }
 
     private isAncestor(possibleAncestor: TreeNode, node: TreeNode): boolean {
@@ -156,4 +179,4 @@ export class World {
     }
 }
 
-export type UpdateContext = {}
+
