@@ -20,4 +20,12 @@ export class FlatNodeRef {
         this.assertValid();
         this.world.setEnabled(this, value);
     }
+
+    equals(otherNode: FlatNodeRef): boolean {
+        return (this.id === otherNode.id && this.version === otherNode.version);
+    }
+
+    belongsTo(world: FlatWorld): boolean {
+        return this.world === world;
+    }
 }

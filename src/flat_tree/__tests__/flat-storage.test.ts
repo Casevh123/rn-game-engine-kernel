@@ -8,6 +8,18 @@ describe('flat storage', () => {
         expect(storage.alive[ROOT_ID]).toBe(1);
     })
 
+    it('root version is initialized to 1', () => {
+        const storage: FlatTreeStorage = new FlatTreeStorage(10);
+
+        expect(storage.version[ROOT_ID]).toBe(1);
+    })
+
+    it('root enabled defaults to 1', () => {
+        const storage: FlatTreeStorage = new FlatTreeStorage(10);
+
+        expect(storage.enabled[ROOT_ID]).toBe(1);
+    })
+
     it(`initializes root parent/children/siblings to ${ NULL }`, () => {
         const storage: FlatTreeStorage = new FlatTreeStorage(10);
 
@@ -35,14 +47,16 @@ describe('flat storage', () => {
         expect(storage.alive[1]).toBe(1);
     })
 
-    it('allocation resets parent/child/sibling pointers', () => {
-        // cannot test yet because no way to attachc nodes TODO
-        expect(true).toBe(true);
-    })
+    it.todo('allocation resets parent/child/sibling pointers')
 
     it("allocation throws when capacity is full", () => {
         const storage: FlatTreeStorage = new FlatTreeStorage(1);
         expect(() => storage.allocate()).toThrow("FlatTreeStorage is full");
+    })
+
+    it('capacity of 1 has a working root', () => {
+        const storage: FlatTreeStorage = new FlatTreeStorage(1);
+        expect(() => storage.assertValidRef(ROOT_ID, storage.version[ROOT_ID])).not.toThrow()
     })
 
     it('free marks node dead', () => {

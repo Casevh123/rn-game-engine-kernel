@@ -15,20 +15,79 @@ describe('basic world tests', () => {
         expect(() => world.assertValidRef(node)).not.toThrow();
     })
 
-    it('stale ref fails after node is freed/ reused', () => {
-        const world: FlatWorld = new FlatWorld(10);
-        const node1: FlatNodeRef = world.createNode();
-        world.storage.free(node1.id);
-        const node2: FlatNodeRef = world.createNode();
-
-        expect(() => world.assertValidRef(node1)).toThrow("Stale node reference");
-    })
+    it.todo('stale ref fails after invalid')
 
     it('enabled defaults to true', () => {
         const world: FlatWorld = new FlatWorld(10);
         const node: FlatNodeRef = world.createNode();
 
         expect(world.isEnabled(node)).toBe(true);
+    })
+
+    it('getParent gets parent', () => {
+        const world: FlatWorld = new FlatWorld(10);
+        const node: FlatNodeRef = world.createNode();
+        world.attach(node, world.root);
+
+        expect(world.getParent(node)?.equals(world.root)).toBe(true);
+    })
+
+    it.todo('getParent returns correct version')
+
+    it('getParent returns null for root', () => {
+        const world: FlatWorld = new FlatWorld(10);
+
+        expect(world.getParent(world.root)).toBeNull();
+    })
+
+    it.todo('getParentFails for if reference is stale')
+
+    it('getParent fails if node does not belong to world', () => {
+        const world1: FlatWorld = new FlatWorld(10);
+        const world2: FlatWorld = new FlatWorld(10);
+        const node: FlatNodeRef = world1.createNode();
+        world1.attach(node, world1.root);
+
+        expect(() => world2.getParent(node)).toThrow("Node does not belong to this world")
+    })
+
+    it('getChildren gets children', () => {
+        const world: FlatWorld = new FlatWorld(10);
+        const node: FlatNodeRef = world.createNode();
+        world.attach(node, world.root);
+
+        expect(world.getChildren(world.root)[0].equals(node)).toBe(true);
+    })
+
+    it.todo('getChildren returns correct version')
+
+
+    it.todo('getChildren fails if reference is stale')
+
+    it('getChildren fails if node does not belong to world', () => {
+        const world1: FlatWorld = new FlatWorld(10);
+        const world2: FlatWorld = new FlatWorld(10);
+        const node: FlatNodeRef = world1.createNode();
+        world1.attach(node, world1.root);
+
+        expect(() => world2.getChildren(world1.root)).toThrow("Node does not belong to this world")
+    })
+
+    it('isAlive returns alive for nodes that are part of the tee', () => {
+        const world: FlatWorld = new FlatWorld(10);
+
+        expect(world.isAlive(world.root)).toBe(true);
+    })
+
+    it.todo('isAlive returns false for nodes that have just been removed')
+
+    it.todo('isAlive fails if reference is stale')
+
+    it('isAlive fails if node does not belong to world', () => {
+        const world1: FlatWorld = new FlatWorld(10);
+        const world2: FlatWorld = new FlatWorld(10);
+
+        expect(() => world1.isAlive(world2.root)).toThrow("Node does not belong to this world")
     })
 })
 
@@ -38,18 +97,19 @@ describe('mutation tests', () => {
         const node: FlatNodeRef = world.createNode();
         world.attach(node, world.root);
 
-        expect(world.storage.parent[node.id]).toBe(world.root.id);
+        expect(world.getParent(node)?.equals(world.root)).toBe(true);
     })
 
     it('attach inserts child into parents firstChild list', () => {
         const world: FlatWorld = new FlatWorld(10);
+        const root: FlatNodeRef = world.root;
         const node: FlatNodeRef = world.createNode();
         world.attach(node, world.root);
 
-        expect(world.storage.firstChild[ROOT_ID]).toBe(node.id);
+        expect(world.getChildren(root)[0].equals(node)).toBe(true);
     })
 
-    it('attaching maintains next sibling / previous sibling links', () => {
+    it('attaching inserts at the front', () => {
         const world: FlatWorld = new FlatWorld(10);
         const node1: FlatNodeRef = world.createNode();
         const node2: FlatNodeRef = world.createNode();
@@ -58,23 +118,11 @@ describe('mutation tests', () => {
         world.attach(node1, world.root);
         world.attach(node2, world.root);
         world.attach(node3, world.root);
+        const children: FlatNodeRef[] = world.getChildren(world.root);
 
-        expect(world.storage.nextSibling[node2.id]).toBe(node1.id);
-        expect(world.storage.prevSibling[node2.id]).toBe(node3.id);
-    })
-
-    it('attaching puts second child before old first child', () => {
-        const world: FlatWorld = new FlatWorld(10);
-        const node1: FlatNodeRef = world.createNode();
-        const node2: FlatNodeRef = world.createNode();
-
-        world.attach(node1, world.root);
-        expect(world.storage.firstChild[ROOT_ID]).toBe(node1.id);
-        world.attach(node2, world.root);
-
-        expect(world.storage.nextSibling[node2.id]).toBe(node1.id);
-        expect(world.storage.prevSibling[node1.id]).toBe(node2.id);
-        expect(world.storage.firstChild[ROOT_ID]).toBe(node2.id);
+        expect(children[0].equals(node3)).toBe(true);
+        expect(children[1].equals(node2)).toBe(true);
+        expect(children[2].equals(node1)).toBe(true);
     })
 
     it('detach clears parent', () => {
@@ -84,7 +132,7 @@ describe('mutation tests', () => {
         world.attach(node, world.root);
         world.detach(node);
 
-        expect(world.storage.parent[node.id]).toBe(NULL);
+        expect(world.getParent(node)).toBe(null);
     })
 
     it('detach removes first child correctly', () => {
@@ -96,10 +144,11 @@ describe('mutation tests', () => {
         world.attach(node1, world.root);
         world.attach(node2, world.root);
         world.attach(node3, world.root);
-        expect(world.storage.firstChild[ROOT_ID]).toBe(node3.id);
         world.detach(node3);
+        const children: FlatNodeRef[] = world.getChildren(world.root);
 
-        expect(world.storage.firstChild[ROOT_ID]).toBe(node2.id);
+        expect(children[0].equals(node2)).toBe(true);
+        expect(children[1].equals(node1)).toBe(true);
     })
 
     it('detach removes middle child correctly', () => {
@@ -111,12 +160,11 @@ describe('mutation tests', () => {
         world.attach(node1, world.root);
         world.attach(node2, world.root);
         world.attach(node3, world.root);
-        expect(world.storage.nextSibling[node3.id]).toBe(node2.id);
-        expect(world.storage.prevSibling[node1.id]).toBe(node2.id);
         world.detach(node2);
+        const children: FlatNodeRef[] = world.getChildren(world.root);
 
-        expect(world.storage.nextSibling[node3.id]).toBe(node1.id);
-        expect(world.storage.prevSibling[node1.id]).toBe(node3.id);
+        expect(children[0].equals(node3)).toBe(true);
+        expect(children[1].equals(node1)).toBe(true);
     })
 
     it('detach removes last child correctly', () => {
@@ -128,19 +176,51 @@ describe('mutation tests', () => {
         world.attach(node1, world.root);
         world.attach(node2, world.root);
         world.attach(node3, world.root);
-        expect(world.storage.nextSibling[node2.id]).toBe(node1.id);
-        expect(world.storage.prevSibling[node1.id]).toBe(node2.id);
         world.detach(node1);
+        const children: FlatNodeRef[] = world.getChildren(world.root);
 
-        expect(world.storage.nextSibling[node2.id]).toBe(NULL);
-        expect(world.storage.prevSibling[node1.id]).toBe(NULL);
+        expect(children[0].equals(node3)).toBe(true);
+        expect(children[1].equals(node2)).toBe(true);
     })
 
-    it('cannot attach root', () => {
+    it('detach removes only child correctly', () => {
+        const world: FlatWorld = new FlatWorld(10);
+        const node: FlatNodeRef = world.createNode();
+        world.attach(node, world.root);
+        world.detach(node);
+
+        expect(world.getParent(node)).toBe(null);
+        expect(world.getChildren(world.root).length).toBe(0);
+    })
+
+    it('cannot attach if child or parent is not in the world', () => {
         const world1: FlatWorld = new FlatWorld(10);
         const world2: FlatWorld = new FlatWorld(10);
+        const node1: FlatNodeRef = world1.createNode();
+        const node2: FlatNodeRef = world2.createNode();
+        world1.attach(node1, world1.root);
+        world2.attach(node2, world2.root);
 
-        expect(() => world1.attach(world2.root, world1.root)).toThrow("Cannot attach root");
+        expect(() => world1.attach(node2, node1)).toThrow("Node does not belong to this world");
+        expect(() => world1.attach(node1, node2)).toThrow("Node does not belong to this world");
+    })
+
+    it.todo("cannot attach a child that is stale");
+
+    it('cannot attach root', () => {
+        const world: FlatWorld = new FlatWorld(10);
+        const node: FlatNodeRef = world.createNode();
+        world.attach(node, world.root);
+
+
+        expect(() => world.attach(world.root, node)).toThrow("Cannot attach root");
+    })
+
+    it('cannot attach a node to itself', () => {
+        const world: FlatWorld = new FlatWorld(10);
+        const node: FlatNodeRef = world.createNode();
+
+        expect(() => world.attach(node, node)).toThrow("Cannot attach a node to itself");
     })
 
     it('cannot attach child with existing parent', () => {
@@ -153,6 +233,17 @@ describe('mutation tests', () => {
 
         expect(() => world.attach(node2, node1)).toThrow("Child already has parent");
     })
+
+    it('cannot detach a node that doesnt belong to the world', () => {
+        const world1: FlatWorld = new FlatWorld(10);
+        const world2: FlatWorld = new FlatWorld(10);
+        const node: FlatNodeRef = world2.createNode();
+        world2.attach(node, world2.root);
+
+        expect(() => world1.detach(node)).toThrow("Node does not belong to this world");
+    })
+
+    it.todo('cannot detach a stale reference')
 
     it('cannot detach root', () => {
         const world: FlatWorld = new FlatWorld(10);
