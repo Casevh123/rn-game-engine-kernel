@@ -175,3 +175,299 @@ describe('destroy', () => {
         })
     })
 })
+
+
+describe('reparent', () => {
+    describe('happy paths', () => {
+        it('moves node from old parent to new parent', () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const node1: FlatNodeRef = world.createNode();
+            const node2: FlatNodeRef = world.createNode();
+
+            world.attach(node1, world.root);
+            world.attach(node2, world.root);
+            expect(world.getParent(node1)?.equals(world.root)).toBe(true);
+            world.reparent(node1, node2);
+
+            expect(world.getParent(node1)?.equals(node2)).toBe(true);
+        })
+
+        it('old parent no longer has child node and new parent does', () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const node1: FlatNodeRef = world.createNode();
+            const node2: FlatNodeRef = world.createNode();
+            const node3: FlatNodeRef = world.createNode();
+
+            world.attach(node1, world.root);
+            world.attach(node2, world.root);
+            world.attach(node3, node1);
+            expect(world.getChildren(node1).length).toBe(1);
+            expect(world.getChildren(node1)[0].equals(node3)).toBe(true);
+            expect(world.getChildren(node2).length).toBe( 0);
+            world.reparent(node3, node2);
+
+            expect(world.getChildren(node1).length).toBe(0);
+            expect(world.getChildren(node2).length).toBe(1);
+            expect(world.getChildren(node2)[0].equals(node3)).toBe(true);
+        })
+
+        it('preserves children after reparent', () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const node1: FlatNodeRef = world.createNode();
+            const node2: FlatNodeRef = world.createNode();
+            const node3: FlatNodeRef = world.createNode();
+            const node4: FlatNodeRef = world.createNode();
+
+            world.attach(node1, world.root);
+            world.attach(node2, world.root);
+            world.attach(node3, node1);
+            world.attach(node4, node1);
+            expect(world.getChildren(node1)[0].equals(node4)).toBe(true);
+            expect(world.getChildren(node1)[1].equals(node3)).toBe(true);
+            world.reparent(node1, node2);
+
+            expect(world.getChildren(node1)[0].equals(node4)).toBe(true);
+            expect(world.getChildren(node1)[1].equals(node3)).toBe(true);
+        })
+
+        it('preserves all descendants with deep subtree', () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const node1: FlatNodeRef = world.createNode();
+            const node2: FlatNodeRef = world.createNode();
+            const node3: FlatNodeRef = world.createNode();
+            const node4: FlatNodeRef = world.createNode();
+
+            world.attach(node1, world.root);
+            world.attach(node2, world.root);
+            world.attach(node3, node1);
+            world.attach(node4, node3);
+            expect(world.getChildren(node1)[0].equals(node3)).toBe(true);
+            expect(world.getChildren(node3)[0].equals(node4)).toBe(true);
+            world.reparent(node1, node2);
+
+            expect(world.getChildren(node1)[0].equals(node3)).toBe(true);
+            expect(world.getChildren(node3)[0].equals(node4)).toBe(true);
+        })
+
+        it('first child — old parent firstChild updates', () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const parent: FlatNodeRef = world.createNode();
+            const node1: FlatNodeRef = world.createNode();
+            const node2: FlatNodeRef = world.createNode();
+            const node3: FlatNodeRef = world.createNode();
+
+            world.attach(parent, world.root);
+            world.attach(node1, parent);
+            world.attach(node2, parent);
+            world.attach(node3, parent);
+            world.reparent(node3, world.root);
+            const children: FlatNodeRef[] = world.getChildren(parent);
+
+            expect(children[0].equals(node2)).toBe(true);
+            expect(children[1].equals(node1)).toBe(true);
+        })
+
+        it('middle child — old parent siblings relink', () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const parent: FlatNodeRef = world.createNode();
+            const node1: FlatNodeRef = world.createNode();
+            const node2: FlatNodeRef = world.createNode();
+            const node3: FlatNodeRef = world.createNode();
+
+            world.attach(parent, world.root);
+            world.attach(node1, parent);
+            world.attach(node2, parent);
+            world.attach(node3, parent);
+            world.reparent(node2, world.root);
+            const children: FlatNodeRef[] = world.getChildren(parent);
+
+            expect(children[0].equals(node3)).toBe(true);
+            expect(children[1].equals(node1)).toBe(true);
+        })
+
+        it('last child — old parent list terminates', () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const parent: FlatNodeRef = world.createNode();
+            const node1: FlatNodeRef = world.createNode();
+            const node2: FlatNodeRef = world.createNode();
+            const node3: FlatNodeRef = world.createNode();
+
+            world.attach(parent, world.root);
+            world.attach(node1, parent);
+            world.attach(node2, parent);
+            world.attach(node3, parent);
+            world.reparent(node1, world.root);
+            const children: FlatNodeRef[] = world.getChildren(parent);
+
+            expect(children[0].equals(node3)).toBe(true);
+            expect(children[1].equals(node2)).toBe(true);
+        })
+
+        it('makes reparented node head of new parent child list and shifts down previous children', () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const parent: FlatNodeRef = world.createNode();
+            const node1: FlatNodeRef = world.createNode();
+            const node2: FlatNodeRef = world.createNode();
+
+            world.attach(parent, world.root);
+            world.attach(node1, world.root);
+            world.attach(node2, parent);
+            expect(world.getChildren(parent)[0].equals(node2)).toBe(true);
+            world.reparent(node1, parent);
+
+            expect(world.getChildren(parent)[0].equals(node1)).toBe(true);
+            expect(world.getChildren(parent)[1].equals(node2)).toBe(true);
+        })
+    })
+
+    describe('error cases', () => {
+        it('cannot reparent root', () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const node1: FlatNodeRef = world.createNode();
+            world.attach(node1, world.root);
+
+            expect(() => world.reparent(world.root, node1)).toThrow("Cannot reparent root node");
+        })
+
+        it('cannot reparent cross-world node', () => {
+            const world1: FlatWorld = new FlatWorld(10);
+            const world2: FlatWorld = new FlatWorld(10);
+            const node1: FlatNodeRef = world1.createNode();
+            const node2: FlatNodeRef = world2.createNode();
+
+            world1.attach(node1, world1.root);
+            world2.attach(node2, world2.root);
+
+            expect(() => world1.reparent(node2, node1)).toThrow("Node does not belong to this world");
+        })
+
+        it('cannot reparent to cross-world parent', () => {
+            const world1: FlatWorld = new FlatWorld(10);
+            const world2: FlatWorld = new FlatWorld(10);
+            const node1: FlatNodeRef = world1.createNode();
+            const node2: FlatNodeRef = world2.createNode();
+
+            world1.attach(node1, world1.root);
+            world2.attach(node2, world2.root);
+
+            expect(() => world1.reparent(node1, node2)).toThrow("Node does not belong to this world");
+        })
+
+        it('cannot reparent stale node ref', () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const node1: FlatNodeRef = world.createNode();
+            const node2: FlatNodeRef = world.createNode();
+
+            world.attach(node1, world.root);
+            world.attach(node2, world.root);
+            world.destroy(node2);
+            world.createNode(); // so node2's id is alive
+
+            expect(() => world.reparent(node2, node1)).toThrow("Stale node reference");
+        })
+
+        it('cannot reparent stale parent ref', () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const node1: FlatNodeRef = world.createNode();
+            const node2: FlatNodeRef = world.createNode();
+
+            world.attach(node1, world.root);
+            world.attach(node2, world.root);
+            world.destroy(node1);
+            world.createNode(); // so node1's id is alive
+
+            expect(() => world.reparent(node2, node1)).toThrow("Stale node reference");
+        })
+
+        it('cannot reparent a node to itself', () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const node: FlatNodeRef = world.createNode();
+
+            world.attach(node, world.root);
+
+            expect(() => world.reparent(node, node)).toThrow("Cannot attach a node to itself");
+        })
+
+        it('cannot reparent parentless node', () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const node: FlatNodeRef = world.createNode();
+
+            expect(() => world.reparent(node, world.root)).toThrow("Node does not have a parent, use attach instead");
+        })
+
+        it('cannot reparent to own child', () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const node1: FlatNodeRef = world.createNode();
+            const node2: FlatNodeRef = world.createNode();
+
+            world.attach(node1, world.root);
+            world.attach(node2, node1);
+
+            expect(() => world.reparent(node1, node2)).toThrow("Cannot create cycle");
+        })
+
+        it('cannot reparent to own grandchild', () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const node1: FlatNodeRef = world.createNode();
+            const node2: FlatNodeRef = world.createNode();
+            const node3: FlatNodeRef = world.createNode();
+
+            world.attach(node1, world.root);
+            world.attach(node2, node1);
+            world.attach(node3, node2);
+
+            expect(() => world.reparent(node1, node3)).toThrow("Cannot create cycle");
+        })
+
+        it('cannot reparent to own to deep descendant', () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const node1: FlatNodeRef = world.createNode();
+            const node2: FlatNodeRef = world.createNode();
+            const node3: FlatNodeRef = world.createNode();
+            const node4: FlatNodeRef = world.createNode();
+
+            world.attach(node1, world.root);
+            world.attach(node2, node1);
+            world.attach(node3, node2);
+            world.attach(node4, node3);
+
+            expect(() => world.reparent(node1, node4)).toThrow("Cannot create cycle");
+        })
+
+        it('cannot reparent to own parent', () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const node1: FlatNodeRef = world.createNode();
+
+            world.attach(node1, world.root);
+
+            expect(() => world.reparent(node1, world.root)).toThrow("Cannot reparent to current parent");
+        })
+    })
+
+    describe('edge cases', () => {
+        it('doesnt change enabled status', () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const node1: FlatNodeRef = world.createNode();
+            const node2: FlatNodeRef = world.createNode();
+
+            world.attach(node1, world.root);
+            world.attach(node2, world.root);
+            expect(world.isEnabled(node2)).toBe(true);
+            world.reparent(node2, node1);
+
+            expect(world.isEnabled(node2)).toBe(true);
+        })
+
+        it('doesnt change node version', () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const node1: FlatNodeRef = world.createNode();
+            const node2: FlatNodeRef = world.createNode();
+
+            world.attach(node1, world.root);
+            world.attach(node2, world.root);
+            world.reparent(node2, node1);
+
+            expect(() => world.assertValidRef(node2)).not.toThrow();
+        })
+    })
+})

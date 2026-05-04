@@ -151,4 +151,67 @@ export class FlatWorld {
 
         this._storage.free(id)
     }
+
+    reparent(node: FlatNodeRef, parent: FlatNodeRef): void {
+        this.assertInWorld(node);
+        this.assertInWorld(parent);
+
+        if (node.id === ROOT_ID) {
+            throw new Error("Cannot reparent root node");
+        }
+
+        if (node.id === parent.id) {
+            throw new Error("Cannot attach a node to itself");
+        }
+
+        if (this._storage.parent[node.id] === NULL) {
+            throw new Error("Node does not have a parent, use attach instead");
+        }
+
+        if (this._isAncestor(node.id, parent.id)) {
+            throw new Error("Cannot create cycle");
+        }
+
+        if (this._storage.parent[node.id] === parent.id) {
+            throw new Error("Cannot reparent to current parent");
+        }
+
+        //remove from old parent
+        const oldParent: number = this._storage.parent[node.id];
+        const prev: number = this._storage.prevSibling[node.id];
+        const next: number = this._storage.nextSibling[node.id];
+
+        if (prev !== NULL) {
+            this._storage.nextSibling[prev] = next;
+        } else {
+            this._storage.firstChild[oldParent] = next;
+        }
+
+        if (next !== NULL) {
+            this._storage.prevSibling[next] = prev;
+        }
+
+        //insert into head of the new parents children list
+        this._storage.parent[node.id] = parent.id;
+
+        const oldFirst: number = this._storage.firstChild[parent.id];
+        this._storage.firstChild[parent.id] = node.id;
+
+        this._storage.nextSibling[node.id] = oldFirst;
+        this._storage.prevSibling[node.id] = NULL;
+
+        if (oldFirst !== NULL) {
+            this._storage.prevSibling[oldFirst] = node.id;
+        }
+    }
+
+    private _isAncestor(possibleAncestorId: number, nodeId: number): boolean {
+        let current: number = this._storage.parent[nodeId];
+        while (current !== NULL) {
+            if (current === possibleAncestorId) return true;
+            current = this._storage.parent[current];
+        }
+
+        return false;
+    }
 }
