@@ -115,4 +115,40 @@ export class FlatWorld {
         this._storage.prevSibling[child.id] = NULL;
         this._storage.nextSibling[child.id] = NULL;
     }
+
+    destroy(node: FlatNodeRef): void {
+        this.assertInWorld(node);
+        if (node.id === ROOT_ID) {
+            throw new Error("Cannot destroy root node");
+        }
+
+        this._destroySubtree(node.id)
+    }
+
+    private _destroySubtree(id: number): void {
+        let childID: number = this._storage.firstChild[id];
+        while (childID !== NULL) {
+            const nextChildID: number = this._storage.nextSibling[childID];
+            this._destroySubtree(childID);
+            childID = nextChildID;
+        }
+
+        const parent = this._storage.parent[id];
+        if (parent !== NULL) {
+            const prev = this._storage.prevSibling[id];
+            const next = this._storage.nextSibling[id];
+
+            if (prev !== NULL) {
+                this._storage.nextSibling[prev] = next;
+            } else {
+                this._storage.firstChild[parent] = next;
+            }
+
+            if (next !== NULL) {
+                this._storage.prevSibling[next] = prev;
+            }
+        }
+
+        this._storage.free(id)
+    }
 }
