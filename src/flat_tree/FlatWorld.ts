@@ -1,15 +1,19 @@
 import {FlatNodeRef} from "./FlatNodeRef";
 import {FlatTreeStorage} from "./FlatTreeStorage";
 import {NULL, ROOT_ID} from "./constants";
+import {ComponentPool} from "./ComponentPool";
 
 export class FlatWorld {
     private _storage: FlatTreeStorage;
     readonly root: FlatNodeRef;
+    private _pools: Set<ComponentPool> = new Set();
 
     constructor(capacity: number) {
         this._storage = new FlatTreeStorage(capacity);
         this.root = new FlatNodeRef(this, ROOT_ID, this._storage.version[ROOT_ID]);
     }
+
+    get capacity(): number { return this._storage.capacity; }
 
     createNode(): FlatNodeRef {
         const { id, version } = this._storage.allocate();
@@ -149,6 +153,9 @@ export class FlatWorld {
             }
         }
 
+        for (const pool of this._pools) {
+            pool._removeByNodeId(id);
+        }
         this._storage.free(id)
     }
 
@@ -213,5 +220,11 @@ export class FlatWorld {
         }
 
         return false;
+    }
+
+    registerPool(pool: ComponentPool): void {
+        if (!pool.belongsTo(this)) throw new Error("Pool does not belong to this world");
+        if (this._pools.has(pool)) throw new Error("Pool already registered");
+        this._pools.add(pool);
     }
 }
