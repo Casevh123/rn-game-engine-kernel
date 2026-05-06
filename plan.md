@@ -1,7 +1,7 @@
 # Plan
 
 > Current state. What's next. What's deferred.
-> Last updated: 2026-05-05
+> Last updated: 2026-05-06
 
 ---
 
@@ -11,34 +11,37 @@
 - **Storage**: SoA allocator, free-list, generational indices, doubly-linked siblings
 - **Components**: Dense pools, swap-and-pop, pool registry, automatic cleanup on destroy
 - **Facade**: FlatWorld + FlatNodeRef with ownership + liveness validation
-- **Tests**: ~100 flat_tree tests across storage, world, destroy/reparent, component pools
+- **Execution model**: System type, CommandBuffer (deferred structural mutations), World.step(dt)
+- **Proof**: Movement system (PositionPool + VelocityPool + movementSystem) demonstrating end-to-end frame loop
+- **Tests**: ~130 tests across storage, world, destroy/reparent, component pools, command buffer, step, and integration
+- **Archived**: `state_tree` (original OOP prototype, served as behavioral reference, now superseded by flat_tree)
 
 ---
 
-## Next: Systems and Update Loop Design
+## Next: Transform Propagation
 
-The component pools are the data layer. What's missing is the **execution model** — the thing that reads and writes component data each frame.
+The frame loop works. The first system that *needs* the tree is transform propagation — computing world transforms from local transforms via a pre-order tree walk.
 
 ### Open questions (must answer before implementing)
 
-**What is a system?**
-A function? A class? Does it declare which pools it reads/writes? Is it a `(pools, dt) => void` signature, or something more structured? This determines the entire DX of the engine.
+**What are transforms?**
+2D only? Position + rotation + scale? 3×3 matrix? `Float32Array` columns like position pools, or a dedicated layout? This affects the pool design and the propagation math.
 
-**Who needs pre-order traversal?**
-In `state_tree`, traversal existed to call `component.update()`. In `flat_tree`, components are data — systems iterate pools, not trees. Tree traversal matters for transform propagation and rendering order, but most systems (movement, health, collision) don't care about parent-child relationships. Traversal may be one specific system, not the backbone of the loop.
+**Does every node have a transform?**
+Or only nodes that opt in via a TransformPool component? If every node has one, it could be a storage column (like `enabled`) rather than a pool.
 
-**What does the update loop orchestrate?**
-`state_tree`: traverse → update components → flush commands. `flat_tree` likely: run systems (each iterates its own pools) → flush commands. The loop is a system scheduler, not a tree walker.
+**Enabled inheritance?**
+Does `node.enabled = false` disable the subtree? If yes, transform propagation should skip disabled subtrees. Needs to be decided before the traversal system is written.
 
-**Does the command bus change shape?**
-Systems that create/destroy nodes during iteration need deferred mutations. Same pattern as `state_tree`, but the trigger is different — systems flush at phase boundaries, not after a tree walk.
+**Can physics write transforms?**
+If a physics body's world position is authoritative, how does that reconcile with the tree's local→world propagation? Does physics write to WorldTransform directly, bypassing local? Or does it write LocalTransform and let propagation compute world?
 
 ### After design is locked
 
-1. Implement whatever traversal/iteration the system model requires
-2. Implement FlatCommandBus (deferred mutations)
-3. Implement the update loop (system scheduler)
-4. Write one concrete system (e.g. MovementSystem: reads Position + Velocity pools) as proof
+1. Implement iterative pre-order tree traversal (explicit stack, not recursion)
+2. Implement LocalTransform + WorldTransform pools (or storage columns)
+3. Implement transformPropagationSystem
+4. Prove: parent moves → child's world transform updates
 
 ---
 
@@ -48,8 +51,10 @@ Systems that create/destroy nodes during iteration need deferred mutations. Same
 |---|---|
 | Reanimated integration | Requires backend decision. SoA layout is compatible — defer until core loop works. |
 | C++ native module | 4-8 week effort. Behavioral spec must be complete first — it IS the port's design doc. |
-| Physics | A system that runs on the component model. Build the model first. |
+| Physics | A system that runs on the component model. Needs transforms first. |
 | Input | Command source, not a core engine feature. Wire after command bus exists. |
 | Rendering | Requires Skia integration. Separate layer on top of the kernel. |
 | Auto-grow storage | Intentionally deferred. Fixed capacity is simpler and avoids GC. Revisit if it becomes a real constraint. |
-| `state_tree` archival | Still useful as behavioral reference for command bus. Archive after flat_tree has feature parity. |
+| User scripting | Facade layer on top of the system model. Design after engine systems prove the model. |
+| Builder/spawn API | Ergonomic wrapper over create + add components + attach. Build after core stabilizes. |
+| Iterative destroy | Convert recursive `_destroySubtree` to explicit stack. Small change, do alongside tree traversal work. |

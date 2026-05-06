@@ -39,13 +39,34 @@ Each pool maintains three mappings:
 
 One component per type per node. Pools are registered with the world for automatic cleanup on destroy.
 
+### Systems
+
+A system is a function `(world, dt) → void` that reads and writes component pool data. Systems are **behavior without data** — the counterpart to components, which are **data without behavior**.
+
+Systems are registered on the world via `addSystem()` and run sequentially in registration order during `step(dt)`. Systems may iterate pools (flat, cache-friendly) or walk the tree (for hierarchy-dependent operations like transform propagation). The system contract constrains **mutation rules**, not **iteration strategy**.
+
+### Command Buffer
+
+Structural mutations (destroy, attach, detach, reparent) must not occur during system execution — they would invalidate pool indices mid-iteration (swap-and-pop changes order) and corrupt tree structure mid-traversal. Instead, systems enqueue mutations into a **CommandBuffer** that executes them after all systems have run.
+
+`createNode()` is immediate (free-list pop, no pool impact). Component `pool.add()` / `pool.remove()` are immediate but must not target a pool currently being iterated by the calling system.
+
+### Frame Loop
+
+`World.step(dt)` is the frame:
+
+1. Run all registered systems in order, each receiving `(world, dt)`
+2. Flush the command buffer (execute all deferred mutations in FIFO order)
+
+Step is non-reentrant. If a system throws, the command buffer is not flushed (partial-frame state is unsafe to commit), but the stepping guard is cleared via `try/finally` so the world remains usable.
+
 ### References
 
 A reference is a `(world, id, version)` tuple — a **generational handle**. The version prevents use-after-free: if a slot has been freed and reallocated, old references are rejected because their version no longer matches. References are ephemeral facades created on the fly, not cached.
 
 ### World
 
-The world owns the memory pool, the pool registry, and all mutation authority. Every operation goes through the world. Every operation validates ownership and liveness before proceeding.
+The world owns the memory pool, the pool registry, the system list, the command buffer, and all mutation authority. Every operation goes through the world. Every operation validates ownership and liveness before proceeding.
 
 ---
 
@@ -59,6 +80,9 @@ The world owns the memory pool, the pool registry, and all mutation authority. E
 6. One component per type per node.
 7. Registered pools are cleaned during destroy, before the slot is freed. Unregistered pools are the caller's responsibility.
 8. Storage arrays are private. No external code touches raw memory.
+9. Structural tree mutations are deferred during system execution. Systems enqueue commands; the world flushes them after all systems run.
+10. Systems run sequentially in registration order. No parallelism guarantees.
+11. `step()` is non-reentrant. Calling `step()` during `step()` is an error.
 
 ---
 
@@ -87,6 +111,8 @@ The world owns the memory pool, the pool registry, and all mutation authority. E
 | `remove(ref)` | Valid ref, has component | Swap-and-pop: last fills gap, moved entry's mappings updated, count-- |
 | `has(ref)` | Valid ref | Returns boolean |
 | `get(ref)` | Valid ref, has component | Returns dense index |
+| `getByNodeId(nodeId)` | (none) | Returns dense index or NULL (-1). No validation — fast path for system iteration |
+| `getNode(index)` | 0 ≤ index < count | Returns FlatNodeRef for the entity at that dense index |
 | `nodeIdAt(i)` | 0 ≤ i < count | Returns owning node id |
 
 ### World-Pool Integration
@@ -95,6 +121,23 @@ The world owns the memory pool, the pool registry, and all mutation authority. E
 |---|---|---|
 | `registerPool(pool)` | Pool belongs to this world, not already registered | Added to registry set |
 | Destroy cleanup | (internal, per registered pool) | `_removeByNodeId` called for each destroyed node before free |
+
+### Command Buffer
+
+| Operation | Preconditions | Postconditions |
+|---|---|---|
+| `destroy(ref)` | (none at enqueue) | Command queued. On flush: `world.destroy(ref)` with full validation |
+| `attach(child, parent)` | (none at enqueue) | Command queued. On flush: `world.attach(child, parent)` |
+| `detach(child)` | (none at enqueue) | Command queued. On flush: `world.detach(child)` |
+| `reparent(node, parent)` | (none at enqueue) | Command queued. On flush: `world.reparent(node, parent)` |
+| `flush()` | (none) | All commands executed FIFO, queue cleared |
+
+### Frame Loop
+
+| Operation | Preconditions | Postconditions |
+|---|---|---|
+| `addSystem(system)` | system is a function | System appended to execution list |
+| `step(dt)` | Not currently inside a step | All systems run in order with dt, then command buffer flushed, stepping flag cleared |
 
 ---
 
@@ -154,6 +197,22 @@ World owns a `Set<ComponentPool>`. Registered pools are cleaned during `_destroy
 
 **Tradeoff**: Only registered pools are cleaned. Intentional — allows pools with lifecycles independent of a single world.
 
+### Systems as Functions
+
+Systems are `(world: FlatWorld, dt: number) => void`. Not classes. Not interfaces with lifecycle hooks.
+
+**Why**: Systems have no state of their own. If a system needs persistent state, that state is a component on some entity, not a field on the system. Functions are the simplest correct abstraction for stateless transforms over pool data. System factories (closures over pools) provide the binding without adding type machinery.
+
+**Tradeoff**: No built-in way to declare which pools a system reads/writes. Scheduling and access validation are the caller's responsibility. Sufficient for sequential single-threaded execution; would need extension for parallelism.
+
+### Deferred Structural Mutations
+
+Systems enqueue structural commands into a CommandBuffer. Commands execute after all systems have run.
+
+**Why**: Structural mutations (destroy, attach, detach, reparent) change pool indices (swap-and-pop) and tree structure. Executing them mid-iteration corrupts the data a system is reading. Deferral guarantees pool index stability within a system's execution.
+
+**Tradeoff**: Systems cannot observe the results of their structural commands within the same frame. A system that creates and then queries a node must accept that the query uses pre-mutation state.
+
 ### Runtime Authority Invariant
 
 One authoritative simulation owner at runtime. It owns all game state: nodes, components, transforms, physics, collision, commands, frame ordering. Other runtimes (JS/React) may submit commands or receive snapshots but never partially own simulation state.
@@ -165,11 +224,3 @@ One authoritative simulation owner at runtime. It owns all game state: nodes, co
 Cross-runtime communication is not part of the core frame loop. JS/React may create initial scenes, send input, send commands, receive debug snapshots. JS/React is never required for: physics step, collision detection, transform propagation, script update, render collection.
 
 **Why**: The core loop must run without blocking on JS bridge latency.
-
----
-
-## Reference Implementation
-
-`state_tree` is the original object-graph prototype. It implements the same scene-graph concept using class instances, string IDs, `Array<TreeNode>` children, and class-based components with `update()` methods. It serves as a behavioral reference for tree operations and the command bus pattern.
-
-`state_tree` will diverge from `flat_tree` as the component model evolves — class instances cannot be shared across thread boundaries, and `update()` methods on components are incompatible with the data-oriented system model. Plan to archive it once `flat_tree` is stable.

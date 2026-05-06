@@ -4,7 +4,7 @@ A data-oriented game engine kernel for React Native. Pure TypeScript behavioral 
 
 ## What this is
 
-React's lifecycle is reactive. Games are imperative. This repo bridges that gap by building the game logic layer first: a scene graph, component system, and (eventually) update loop, all testable without a device.
+React's lifecycle is reactive. Games are imperative. This repo bridges that gap by building the game logic layer first: a scene graph, component system, and update loop, all testable without a device.
 
 The architecture uses struct-of-arrays (SoA) layout, generational indices, and dense component pools — designed for cache-friendly simulation and future compatibility with SharedArrayBuffer / native C++ backends.
 
@@ -14,6 +14,9 @@ The architecture uses struct-of-arrays (SoA) layout, generational indices, and d
 - **Generational indices** — `(id, version)` references prevent use-after-free on slot reuse
 - **Doubly-linked sibling lists** — O(1) attach/detach
 - **Dense component pools** — swap-and-pop removal, one pool per component type
+- **Systems** — `(world, dt) → void` functions that read/write pool data
+- **Command buffer** — deferred structural mutations, flushed after all systems run
+- **Frame loop** — `World.step(dt)` runs systems sequentially then flushes commands
 - **Facade pattern** — OOP ergonomics (`node.enabled = false`) over DOD storage
 
 ## Documentation
@@ -25,7 +28,7 @@ Tests are the executable spec. Docs capture what tests can't: the model, the inv
 
 ## Status
 
-**Core kernel** — tree operations (create, attach, detach, destroy, reparent) and component pools are complete and tested. Next milestone: systems and update loop design.
+**Core kernel complete** — tree operations, component pools, execution model (systems + command buffer + frame loop) are implemented and tested. Next milestone: transform propagation.
 
 ```
 npm test
