@@ -2,15 +2,21 @@ import {FlatNodeRef} from "./FlatNodeRef";
 import {FlatTreeStorage} from "./FlatTreeStorage";
 import {NULL, ROOT_ID} from "./constants";
 import {ComponentPool} from "./ComponentPool";
+import {CommandBuffer} from "./CommandBuffer";
+import {System} from "./types";
 
 export class FlatWorld {
     private _storage: FlatTreeStorage;
     readonly root: FlatNodeRef;
     private _pools: Set<ComponentPool> = new Set();
+    private _systems: System[] = [];
+    private _stepping: boolean = false;
+    readonly commandBuffer: CommandBuffer;
 
     constructor(capacity: number) {
         this._storage = new FlatTreeStorage(capacity);
         this.root = new FlatNodeRef(this, ROOT_ID, this._storage.version[ROOT_ID]);
+        this.commandBuffer = new CommandBuffer(this);
     }
 
     get capacity(): number { return this._storage.capacity; }
@@ -226,5 +232,24 @@ export class FlatWorld {
         if (!pool.belongsTo(this)) throw new Error("Pool does not belong to this world");
         if (this._pools.has(pool)) throw new Error("Pool already registered");
         this._pools.add(pool);
+    }
+
+    addSystem(system: System): void {
+        this._systems.push(system);
+    }
+
+    step(dt: number): void {
+        if (this._stepping) {
+            throw new Error("Cannot call step() during step()");
+        }
+        this._stepping = true;
+        try {
+            for (const system of this._systems) {
+                system(this, dt);
+            }
+            this.commandBuffer.flush();
+        } finally {
+            this._stepping = false;
+        }
     }
 }

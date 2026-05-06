@@ -1,6 +1,7 @@
 import {ComponentPool} from "../ComponentPool";
 import {FlatWorld} from "../FlatWorld";
 import {FlatNodeRef} from "../FlatNodeRef";
+import {NULL} from "../constants";
 
 
 describe('component pool', () => {
@@ -56,6 +57,42 @@ describe('component pool', () => {
             expect(pool.get(root)).toBe(id);
         })
 
+        it('getByNodeId returns the correct component id', () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const root: FlatNodeRef = world.root;
+            const pool: TestPool = new TestPool(world, 5);
+
+            const id: number = pool.add(root);
+
+            expect(pool.getByNodeId(root.id)).toBe(id);
+        })
+
+        it(`getByNodeId returns ${NULL} for node that doesn't have the component`, () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const root: FlatNodeRef = world.root;
+            const pool: TestPool = new TestPool(world, 5);
+
+            expect(pool.getByNodeId(root.id)).toBe(NULL);
+        })
+
+        it('getByNodeId returns correct index after swap and pop', () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const root: FlatNodeRef = world.root;
+            const node1: FlatNodeRef = world.createNode();
+            const node2: FlatNodeRef = world.createNode();
+            const pool: TestPool = new TestPool(world, 5);
+            pool.add(root);
+            pool.add(node1);
+            const originalId: number = pool.add(node2);
+
+            expect(pool.getByNodeId(node2.id)).toBe(originalId);
+            pool.remove(node1);
+            const newId: number = pool.getByNodeId(node2.id);
+
+            expect(originalId).not.toEqual(newId);
+            expect(pool.nodeIdAt(newId)).toEqual(node2.id);
+        })
+
         it('increments count on add', () => {
             const world: FlatWorld = new FlatWorld(10);
             const root: FlatNodeRef = world.root;
@@ -90,6 +127,16 @@ describe('component pool', () => {
             expect(pool.nodeIdAt(id0)).toBe(root.id);
         })
 
+        it('getNode(i) returns correct node', () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const root: FlatNodeRef = world.root;
+            const pool: TestPool = new TestPool(world, 5);
+
+            const id0: number = pool.add(root);
+
+            expect(pool.getNode(id0).equals(root)).toBe(true);
+        })
+
         it('after remove has return false', () => {
             const world: FlatWorld = new FlatWorld(10);
             const root: FlatNodeRef = world.root;
@@ -102,7 +149,7 @@ describe('component pool', () => {
             expect(pool.has(root)).toBe(false);
         })
 
-        it('after remove data can be readed to the same node', () => {
+        it('after remove data can be read added to the same node', () => {
             const world: FlatWorld = new FlatWorld(10);
             const root: FlatNodeRef = world.root;
             const pool: TestPool = new TestPool(world, 5);

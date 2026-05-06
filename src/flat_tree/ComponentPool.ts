@@ -51,8 +51,6 @@ export abstract class ComponentPool {
         return compId;
     }
 
-
-
     remove(ref: FlatNodeRef): void {
         this._world.assertInWorld(ref);
 
@@ -77,6 +75,18 @@ export abstract class ComponentPool {
         }
 
         return this.nodeToComponent[ref.id];
+    }
+
+    getByNodeId(nodeId: number): number {
+        return this.nodeToComponent[nodeId];
+    }
+
+    getNode(index: number): FlatNodeRef {
+        const id: number = this.nodeIdAt(index); // verifies index
+
+        const ref: FlatNodeRef = new FlatNodeRef(this._world, id, this.componentToVersion[index]);
+
+        return ref;
     }
 
     nodeIdAt(index: number): number {
