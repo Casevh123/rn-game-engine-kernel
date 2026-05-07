@@ -177,16 +177,65 @@ describe('Error Cases', () => {
                 world.commandBuffer.destroy(node);
                 throw new Error("This system is ruining everything");
             } else {
+                world.commandBuffer.destroy(node);
                 timesRan++;
             }
         }
         world.addSystem(system);
         expect(() => world.step(1)).toThrow("This system is ruining everything");
         expect(world.isAlive(node)).toBe(true);
-        expect(world.commandBuffer.size).toBe(1);
+        expect(world.commandBuffer.size).toBe(0);
 
         expect(() => world.step(1)).not.toThrow();
         expect(world.isAlive(node)).toBe(false);
         expect(world.commandBuffer.size).toBe(0);
+    })
+
+    it('Cannot attach during step', () => {
+        const world: FlatWorld = new FlatWorld(10);
+        const node: FlatNodeRef = world.createNode();
+        const system: System = (world: FlatWorld, dt: number): void => {
+            world.attach(node, world.root);
+        }
+        world.addSystem(system);
+
+        expect(() => world.step(1)).toThrow("Cannot attach during step, use commandBuffer");
+    })
+
+    it('Cannot detach during step', () => {
+        const world: FlatWorld = new FlatWorld(10);
+        const node: FlatNodeRef = world.createNode();
+        world.attach(node, world.root);
+        const system: System = (world: FlatWorld, dt: number): void => {
+            world.detach(node);
+        }
+        world.addSystem(system);
+
+        expect(() => world.step(1)).toThrow("Cannot detach during step, use commandBuffer");
+    })
+
+    it('Cannot destroy during step', () => {
+        const world: FlatWorld = new FlatWorld(10);
+        const node: FlatNodeRef = world.createNode();
+        const system: System = (world: FlatWorld, dt: number): void => {
+            world.destroy(node);
+        }
+        world.addSystem(system);
+
+        expect(() => world.step(1)).toThrow("Cannot destroy during step, use commandBuffer");
+    })
+
+    it('Cannot reparent during step', () => {
+        const world: FlatWorld = new FlatWorld(10);
+        const nodeA: FlatNodeRef = world.createNode();
+        const nodeB: FlatNodeRef = world.createNode();
+        world.attach(nodeA, world.root);
+        world.attach(nodeB, world.root);
+        const system: System = (world: FlatWorld, dt: number): void => {
+            world.reparent(nodeA, nodeB);
+        }
+        world.addSystem(system);
+
+        expect(() => world.step(1)).toThrow("Cannot reparent during step, use commandBuffer");
     })
 })

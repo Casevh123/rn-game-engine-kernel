@@ -1,20 +1,22 @@
 # Plan
 
 > Current state. What's next. What's deferred.
-> Last updated: 2026-05-06
+> Last updated: 2026-05-07
 
 ---
 
 ## Done
 
-- **Tree**: create, attach, detach, destroy (recursive subtree), reparent (cycle detection)
+- **Tree**: create, attach, detach, destroy (iterative post-order subtree), reparent (cycle detection)
 - **Storage**: SoA allocator, free-list, generational indices, doubly-linked siblings
 - **Components**: Dense pools, swap-and-pop, pool registry, automatic cleanup on destroy
 - **Facade**: FlatWorld + FlatNodeRef with ownership + liveness validation
 - **Execution model**: System type, CommandBuffer (deferred structural mutations), World.step(dt)
 - **Proof**: Movement system (PositionPool + VelocityPool + movementSystem) demonstrating end-to-end frame loop
-- **Tests**: ~130 tests across storage, world, destroy/reparent, component pools, command buffer, step, and integration
+- **Tests**: ~138 tests across storage, world, destroy/reparent, component pools, command buffer, step, and integration
 - **Archived**: `state_tree` (original OOP prototype, served as behavioral reference, now superseded by flat_tree)
+- **Axiom 9 enforcement**: Runtime guards on `destroy()`, `attach()`, `detach()`, `reparent()` — throw during `step()`
+- **Crash recovery**: System throw clears command buffer (atomic frame semantics), world remains usable
 
 ---
 
@@ -57,4 +59,3 @@ If a physics body's world position is authoritative, how does that reconcile wit
 | Auto-grow storage | Intentionally deferred. Fixed capacity is simpler and avoids GC. Revisit if it becomes a real constraint. |
 | User scripting | Facade layer on top of the system model. Design after engine systems prove the model. |
 | Builder/spawn API | Ergonomic wrapper over create + add components + attach. Build after core stabilizes. |
-| Iterative destroy | Convert recursive `_destroySubtree` to explicit stack. Small change, do alongside tree traversal work. |

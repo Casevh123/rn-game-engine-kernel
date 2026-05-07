@@ -33,6 +33,10 @@ export class CommandBuffer {
         }
     }
 
+    clear(): void {
+        this._queue = [];
+    }
+
     get size(): number {
         return this._queue.length;
     }

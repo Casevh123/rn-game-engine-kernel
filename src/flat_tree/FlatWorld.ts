@@ -78,6 +78,10 @@ export class FlatWorld {
     }
 
     attach(child: FlatNodeRef, parent: FlatNodeRef): void {
+        if (this._stepping) {
+            throw new Error("Cannot attach during step, use commandBuffer")
+        }
+
         this.assertInWorld(child);
         this.assertInWorld(parent);
 
@@ -101,6 +105,10 @@ export class FlatWorld {
     }
 
     detach(child: FlatNodeRef): void {
+        if (this._stepping) {
+            throw new Error("Cannot detach during step, use commandBuffer")
+        }
+
         this.assertInWorld(child);
 
         if (child.id === ROOT_ID) throw new Error("Cannot detach root");
@@ -127,6 +135,10 @@ export class FlatWorld {
     }
 
     destroy(node: FlatNodeRef): void {
+        if (this._stepping) {
+            throw new Error("Cannot destroy during step, use commandBuffer")
+        }
+
         this.assertInWorld(node);
         if (node.id === ROOT_ID) {
             throw new Error("Cannot destroy root node");
@@ -136,17 +148,29 @@ export class FlatWorld {
     }
 
     private _destroySubtree(id: number): void {
-        let childID: number = this._storage.firstChild[id];
-        while (childID !== NULL) {
-            const nextChildID: number = this._storage.nextSibling[childID];
-            this._destroySubtree(childID);
-            childID = nextChildID;
+        const stack1: number[] = [id];
+        const stack2: number[] = [];
+        while (stack1.length > 0) {
+            const node: number = stack1.pop()!;
+            stack2.push(node);
+            let childId: number = this._storage.firstChild[node];
+            while (childId !== NULL) {
+                stack1.push(childId);
+                childId = this._storage.nextSibling[childId];
+            }
         }
 
-        const parent = this._storage.parent[id];
+        while (stack2.length > 0) {
+            const node: number = stack2.pop()!;
+            this._destroyLeaf(node);
+        }
+    }
+
+    private _destroyLeaf(id: number) {
+        const parent: number = this._storage.parent[id];
         if (parent !== NULL) {
-            const prev = this._storage.prevSibling[id];
-            const next = this._storage.nextSibling[id];
+            const prev: number = this._storage.prevSibling[id];
+            const next: number = this._storage.nextSibling[id];
 
             if (prev !== NULL) {
                 this._storage.nextSibling[prev] = next;
@@ -166,6 +190,10 @@ export class FlatWorld {
     }
 
     reparent(node: FlatNodeRef, parent: FlatNodeRef): void {
+        if (this._stepping) {
+            throw new Error("Cannot reparent during step, use commandBuffer")
+        }
+
         this.assertInWorld(node);
         this.assertInWorld(parent);
 
@@ -247,9 +275,13 @@ export class FlatWorld {
             for (const system of this._systems) {
                 system(this, dt);
             }
-            this.commandBuffer.flush();
+        } catch (e) {
+            this.commandBuffer.clear();
+            throw e;
         } finally {
             this._stepping = false;
         }
+
+        this.commandBuffer.flush();
     }
 }

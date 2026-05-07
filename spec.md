@@ -22,7 +22,7 @@ Children are stored as a **doubly-linked sibling list** per parent. Structural m
 
 - **Attach**: head-insert into parent's child list
 - **Detach**: linked-list splice
-- **Destroy**: recursive depth-first — children first, then unlink from parent, clean component pools, free slot
+- **Destroy**: iterative post-order (two-stack) — children first, then unlink from parent, clean component pools, free slot
 - **Reparent**: inline unlink + head-insert (not detach→attach, which would reject the parentless intermediate state)
 
 ### Components
@@ -47,7 +47,7 @@ Systems are registered on the world via `addSystem()` and run sequentially in re
 
 ### Command Buffer
 
-Structural mutations (destroy, attach, detach, reparent) must not occur during system execution — they would invalidate pool indices mid-iteration (swap-and-pop changes order) and corrupt tree structure mid-traversal. Instead, systems enqueue mutations into a **CommandBuffer** that executes them after all systems have run.
+Structural mutations (destroy, attach, detach, reparent) must not occur during system execution — they would invalidate pool indices mid-iteration (swap-and-pop changes order) and corrupt tree structure mid-traversal. This is **enforced at runtime**: calling `destroy()`, `attach()`, `detach()`, or `reparent()` directly on the world during `step()` throws. Systems must enqueue mutations into a **CommandBuffer** that executes them after all systems have run.
 
 `createNode()` is immediate (free-list pop, no pool impact). Component `pool.add()` / `pool.remove()` are immediate but must not target a pool currently being iterated by the calling system.
 
@@ -58,7 +58,7 @@ Structural mutations (destroy, attach, detach, reparent) must not occur during s
 1. Run all registered systems in order, each receiving `(world, dt)`
 2. Flush the command buffer (execute all deferred mutations in FIFO order)
 
-Step is non-reentrant. If a system throws, the command buffer is not flushed (partial-frame state is unsafe to commit), but the stepping guard is cleared via `try/finally` so the world remains usable.
+Step is non-reentrant. If a system throws, the command buffer is **cleared** (partial-frame commands are unsafe to commit — they may have causal dependencies on commands that never ran). The stepping guard is cleared and the error is re-thrown so the world remains usable for subsequent frames.
 
 ### References
 
@@ -80,7 +80,7 @@ The world owns the memory pool, the pool registry, the system list, the command 
 6. One component per type per node.
 7. Registered pools are cleaned during destroy, before the slot is freed. Unregistered pools are the caller's responsibility.
 8. Storage arrays are private. No external code touches raw memory.
-9. Structural tree mutations are deferred during system execution. Systems enqueue commands; the world flushes them after all systems run.
+9. Structural tree mutations are deferred during system execution. **Enforced at runtime** — direct calls to `destroy()`, `attach()`, `detach()`, `reparent()` throw during `step()`. Systems enqueue commands; the world flushes them after all systems run.
 10. Systems run sequentially in registration order. No parallelism guarantees.
 11. `step()` is non-reentrant. Calling `step()` during `step()` is an error.
 
@@ -131,13 +131,14 @@ The world owns the memory pool, the pool registry, the system list, the command 
 | `detach(child)` | (none at enqueue) | Command queued. On flush: `world.detach(child)` |
 | `reparent(node, parent)` | (none at enqueue) | Command queued. On flush: `world.reparent(node, parent)` |
 | `flush()` | (none) | All commands executed FIFO, queue cleared |
+| `clear()` | (none) | Queue discarded without execution |
 
 ### Frame Loop
 
 | Operation | Preconditions | Postconditions |
 |---|---|---|
 | `addSystem(system)` | system is a function | System appended to execution list |
-| `step(dt)` | Not currently inside a step | All systems run in order with dt, then command buffer flushed, stepping flag cleared |
+| `step(dt)` | Not currently inside a step | All systems run in order with dt, then command buffer flushed, stepping flag cleared. On system throw: buffer cleared, flag cleared, error re-thrown |
 
 ---
 

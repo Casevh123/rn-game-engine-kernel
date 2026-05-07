@@ -47,7 +47,20 @@ describe('flat storage', () => {
         expect(storage.alive[1]).toBe(1);
     })
 
-    it.todo('allocation resets parent/child/sibling pointers')
+    it('allocation resets parent/child/sibling pointers', () => {
+        const storage: FlatTreeStorage = new FlatTreeStorage(10);
+        storage.parent[1] = 10;
+        storage.firstChild[1] = 10;
+        storage.nextSibling[1] = 10;
+        storage.prevSibling[1] = 10;
+        const {id, version} = storage.allocate();
+
+        expect(id).toBe(1);
+        expect(storage.parent[id]).toBe(NULL);
+        expect(storage.firstChild[id]).toBe(NULL);
+        expect(storage.nextSibling[id]).toBe(NULL);
+        expect(storage.prevSibling[id]).toBe(NULL);
+    })
 
     it("allocation throws when capacity is full", () => {
         const storage: FlatTreeStorage = new FlatTreeStorage(1);

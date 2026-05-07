@@ -15,7 +15,15 @@ describe('basic world tests', () => {
         expect(() => world.assertValidRef(node)).not.toThrow();
     })
 
-    it.todo('stale ref fails after invalid')
+    it('stale ref fails after invalid', () => {
+        const world: FlatWorld = new FlatWorld(10);
+        const doomedNode: FlatNodeRef = world.createNode();
+        world.destroy(doomedNode);
+        const reincarnatedNode: FlatNodeRef = world.createNode();
+
+        expect(doomedNode.id).toBe(reincarnatedNode.id);
+        expect(() => world.assertValidRef(doomedNode)).toThrow("Stale node reference");
+    })
 
     it('enabled defaults to true', () => {
         const world: FlatWorld = new FlatWorld(10);
@@ -32,7 +40,19 @@ describe('basic world tests', () => {
         expect(world.getParent(node)?.equals(world.root)).toBe(true);
     })
 
-    it.todo('getParent returns correct version')
+    it('getParent returns correct version', () => {
+        const world: FlatWorld = new FlatWorld(10);
+        const child: FlatNodeRef = world.createNode();
+        const doomedParent: FlatNodeRef = world.createNode();
+        world.destroy(doomedParent);
+        const reincarnatedParent: FlatNodeRef = world.createNode();
+
+        world.attach(child, reincarnatedParent);
+        expect(reincarnatedParent.id).toBe(doomedParent.id);
+        expect(reincarnatedParent.version).toBe(doomedParent.version + 1);
+        expect(world.getParent(child)?.equals(reincarnatedParent)).toBe(true);
+        expect(world.getParent(child)?.equals(doomedParent)).toBe(false);
+    })
 
     it('getParent returns null for root', () => {
         const world: FlatWorld = new FlatWorld(10);
@@ -40,7 +60,15 @@ describe('basic world tests', () => {
         expect(world.getParent(world.root)).toBeNull();
     })
 
-    it.todo('getParentFails for if reference is stale')
+    it('getParentFails for if reference is stale', () => {
+        const world: FlatWorld = new FlatWorld(10);
+        const doomedNode: FlatNodeRef = world.createNode();
+        world.destroy(doomedNode);
+        const reincarnatedNode: FlatNodeRef = world.createNode();
+
+        expect(doomedNode.id).toBe(reincarnatedNode.id);
+        expect(() => world.getParent(doomedNode)).toThrow("Stale node reference");
+    })
 
     it('getParent fails if node does not belong to world', () => {
         const world1: FlatWorld = new FlatWorld(10);
@@ -59,10 +87,30 @@ describe('basic world tests', () => {
         expect(world.getChildren(world.root)[0].equals(node)).toBe(true);
     })
 
-    it.todo('getChildren returns correct version')
+    it('getChildren returns correct version', () => {
+        const world: FlatWorld = new FlatWorld(10);
+        const parent: FlatNodeRef = world.createNode();
+        const doomedChild: FlatNodeRef = world.createNode();
+        world.destroy(doomedChild);
+        const reincarnatedChild: FlatNodeRef = world.createNode();
+
+        world.attach(reincarnatedChild, parent);
+        expect(reincarnatedChild.id).toBe(doomedChild.id);
+        expect(reincarnatedChild.version).toBe(doomedChild.version + 1);
+        expect(world.getChildren(parent)[0]?.equals(reincarnatedChild)).toBe(true);
+        expect(world.getChildren(parent)[0]?.equals(doomedChild)).toBe(false);
+    })
 
 
-    it.todo('getChildren fails if reference is stale')
+    it('getChildren fails if reference is stale', () => {
+        const world: FlatWorld = new FlatWorld(10);
+        const doomedNode: FlatNodeRef = world.createNode();
+        world.destroy(doomedNode);
+        const reincarnatedNode: FlatNodeRef = world.createNode();
+
+        expect(doomedNode.id).toBe(reincarnatedNode.id);
+        expect(() => world.getChildren(doomedNode)).toThrow("Stale node reference");
+    })
 
     it('getChildren fails if node does not belong to world', () => {
         const world1: FlatWorld = new FlatWorld(10);
@@ -79,9 +127,15 @@ describe('basic world tests', () => {
         expect(world.isAlive(world.root)).toBe(true);
     })
 
-    it.todo('isAlive returns false for nodes that have just been removed')
+    it('isAlive returns false for nodes that have been removed', () => {
+        const world: FlatWorld = new FlatWorld(10);
+        const node: FlatNodeRef = world.createNode();
 
-    it.todo('isAlive fails if reference is stale')
+        expect(world.isAlive(node)).toBe(true);
+        world.destroy(node);
+
+        expect(world.isAlive(node)).toBe(false);
+    })
 
     it('isAlive fails if node does not belong to world', () => {
         const world1: FlatWorld = new FlatWorld(10);
@@ -205,7 +259,16 @@ describe('mutation tests', () => {
         expect(() => world1.attach(node1, node2)).toThrow("Node does not belong to this world");
     })
 
-    it.todo("cannot attach a child that is stale");
+    it("cannot attach a child that is stale", () => {
+        const world: FlatWorld = new FlatWorld(10);
+        const doomedNode: FlatNodeRef = world.createNode();
+
+        world.destroy(doomedNode);
+        const reincarnatedNode: FlatNodeRef = world.createNode();
+
+        expect(doomedNode.id).toBe(reincarnatedNode.id);
+        expect(() => world.attach(doomedNode, world.root)).toThrow("Stale node reference");
+    });
 
     it('cannot attach root', () => {
         const world: FlatWorld = new FlatWorld(10);
@@ -243,7 +306,17 @@ describe('mutation tests', () => {
         expect(() => world1.detach(node)).toThrow("Node does not belong to this world");
     })
 
-    it.todo('cannot detach a stale reference')
+    it('cannot detach a stale reference', () => {
+        const world: FlatWorld = new FlatWorld(10);
+        const doomedNode: FlatNodeRef = world.createNode();
+
+        world.destroy(doomedNode);
+        const reincarnatedNode: FlatNodeRef = world.createNode();
+
+        expect(doomedNode.id).toBe(reincarnatedNode.id);
+        expect(() => world.detach(doomedNode)).toThrow("Stale node reference");
+    })
+
 
     it('cannot detach root', () => {
         const world: FlatWorld = new FlatWorld(10);

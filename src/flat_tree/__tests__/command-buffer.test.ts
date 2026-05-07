@@ -85,6 +85,19 @@ describe('command-buffer test', () => {
             expect(buffer.size).toBe(0);
         })
 
+        it('clear() clears the queue but doesn\'t run commands', () => {
+            const world: FlatWorld = new FlatWorld(10);
+            const buffer: CommandBuffer = new CommandBuffer(world);
+            const node: FlatNodeRef = world.createNode();
+
+            buffer.destroy(node);
+            expect(buffer.size).toBe(1);
+            buffer.clear();
+
+            expect(buffer.size).toBe(0);
+            expect(world.isAlive(node)).toBe(true);
+        })
+
         it('second flush after first flush is no-op, size stays 0 (doesn\'t throw)', () => {
             const world: FlatWorld = new FlatWorld(10);
             const buffer: CommandBuffer = new CommandBuffer(world);
