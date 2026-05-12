@@ -1,12 +1,12 @@
-# React Native Game Engine — Prototype
+# React Native Game Engine
 
-A data-oriented game engine kernel for React Native. Pure TypeScript behavioral specification — no platform dependencies.
+A data-oriented 2D game engine kernel for React Native. Pure TypeScript — runs on a dedicated background thread via `createWorkletRuntime`, renders through react-native-skia.
 
 ## What this is
 
-React's lifecycle is reactive. Games are imperative. This repo bridges that gap by building the game logic layer first: a scene graph, component system, and update loop, all testable without a device.
+React's lifecycle is reactive. Games are imperative. This engine bridges that gap with a high-performance kernel that owns all simulation state on its own thread, while React serves as a declarative scene API and Skia handles GPU rendering.
 
-The architecture uses struct-of-arrays (SoA) layout, generational indices, and dense component pools — designed for cache-friendly simulation and future compatibility with SharedArrayBuffer / native C++ backends.
+The kernel is developed and tested in isolation — no React Native dependency. Its invariants are proven by ~196 tests and hold regardless of runtime environment. The kernel IS the runtime, not a spec for a future port.
 
 ## Architecture
 
@@ -20,18 +20,31 @@ The architecture uses struct-of-arrays (SoA) layout, generational indices, and d
 - **Frame loop** — `World.step(dt)` runs systems sequentially then flushes commands
 - **Facade pattern** — OOP ergonomics (`node.enabled = false`) over DOD storage
 
+## Runtime Model
+
+```
+┌─────────────────────┐     ┌─────────────────────┐     ┌─────────────────────┐
+│   React (JS Thread) │     │  Kernel (Worklet     │     │  Skia (UI Thread)   │
+│                     │────▶│  Background Thread)  │────▶│                     │
+│  Scene declaration  │     │  World.step(dt)      │     │  <Atlas> + drawAtlas│
+│  User input events  │     │  SoA pools           │     │  useRSXformBuffer   │
+│  Command source     │     │  Transform propagate │     │  useFrameCallback   │
+└─────────────────────┘     └─────────────────────┘     └─────────────────────┘
+```
+
+The kernel is the sole authority over simulation state. React is a projection (sends commands, never owns state). The renderer is a consumer (reads snapshots, never writes back).
+
 ## Documentation
 
 - [`spec.md`](spec.md) — Abstract model, invariants, operation contracts, design decisions with rationale
-- [`plan.md`](plan.md) — Current state, what's next, what's deferred
+- [`plan.md`](plan.md) — Version roadmap (v0–v2), kernel work remaining, open architecture decisions
 
 Tests are the executable spec. Docs capture what tests can't: the model, the invariants, and *why*.
 
 ## Status
 
-**Kernel functionally complete** — tree operations, component pools, execution model, and transform propagation are implemented and tested (~196 tests). Next milestone: user-facing API design (script hooks, React reconciler, engine system auto-registration).
+**Kernel functionally complete** — tree operations, component pools, execution model, and transform propagation are implemented and tested (~196 tests). Currently filling out remaining kernel-side features (render collection, sprites, camera, input state, animations) before wiring the worklet runtime integration (v0).
 
 ```
 npm test
 ```
-

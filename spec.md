@@ -1,6 +1,8 @@
 # Engine Specification
 
 > The abstract model for a data-oriented game engine kernel. Tests are the executable spec. This document captures what tests cannot: the model, the invariants, and why decisions were made.
+>
+> This spec describes the kernel that runs on a dedicated worklet thread via `createWorkletRuntime`. The invariants defined here are runtime-agnostic — they hold in tests, in a worklet, or in any future backend. Cross-thread boundaries (kernel ↔ renderer, kernel ↔ React) are documented in [`plan.md`](plan.md).
 
 ---
 

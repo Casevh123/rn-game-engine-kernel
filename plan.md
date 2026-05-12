@@ -22,37 +22,159 @@
 
 ---
 
-## Next: User-Facing API Design
+## Runtime Target
 
-The kernel is functionally complete — tree, components, execution model, and transforms are implemented and tested. The next architectural milestone is designing the user-facing layer that sits on top of the kernel.
+This TypeScript kernel IS the runtime — not a behavioral specification for a future C++ port. It runs on a dedicated background JS thread via `createWorkletRuntime` (react-native-worklets).
 
-### Open questions (must answer before implementing)
+| Concern | Thread | Technology |
+|---|---|---|
+| Game kernel (World.step, SoA pools, systems) | Background worklet thread | TypeScript, `createWorkletRuntime` |
+| Rendering | UI thread (main thread) | react-native-skia `<Atlas>`, `useRSXformBuffer` |
+| Scene declaration & UI | JS thread | React, custom reconciler (v1.3+) |
+| Data transport (kernel → renderer) | Cross-thread | SharedValue (v0) → native buffer via Nitro (v1+) |
+| Input transport (UI → kernel) | Cross-thread | SharedValue snapshot, read per frame |
 
-**What does the user API look like?**
-Users should not write raw systems. The target is Godot/Unity-style per-node scripts with lifecycle hooks (`onReady`, `onUpdate`, `onPhysicsUpdate`, `onDestroy`). Under the hood, a `ScriptExecutionSystem` (engine system) iterates all nodes with scripts and calls their hooks. Design the hook surface.
-
-**Frame loop pipeline ordering?**
-With engine systems (transform propagation, future physics, render collection) AND user scripts, the frame ordering becomes non-trivial. If a user script reads world positions, transforms must propagate first. If a script moves entities, transforms must propagate again. Double-propagation per frame? Accept one-frame latency? Fixed pipeline stages?
-
-**React reconciler?**
-The kernel already has the right primitives for a custom React reconciler (`createNode` → `createElement`, `attach` → `appendChild`, etc.). Is this the right time to build it, or does it depend on the user API design?
-
-**Engine system auto-registration?**
-Transform propagation should be automatic — the user shouldn't manually call `addSystem()` for engine systems. Design the boundary between engine systems (automatic, internal) and user systems (registered, or expressed as scripts).
-
-**Component registration lifecycle?**
-Can components be added at runtime? (Pool system supports it.) Should the API be declarative (React reconciler handles it) or imperative (scripts call `addComponent()`)? Or both?
+**Authority model**: The kernel is the sole owner of simulation state. React is a projection — it sends commands but never owns entities, transforms, or components at runtime. The renderer is a consumer — it reads snapshots but never writes back.
 
 ---
 
-## Deferred
+## Version Roadmap
 
-| Feature | Why deferred |
-|---|---|
-| Reanimated integration | Requires backend decision. SoA layout is compatible — defer until core loop works. |
-| C++ native module | 4-8 week effort. Behavioral spec must be complete first — it IS the port's design doc. |
-| Physics | A system that runs on the component model. Needs transforms (done) and user API design. |
-| Input | Command source, not a core engine feature. Wire after command bus exists. |
-| Rendering | Requires Skia integration. Rendering architecture is researched (RSXform → Atlas pipeline). Separate layer on top of the kernel. |
-| Auto-grow storage | Intentionally deferred. Fixed capacity is simpler and avoids GC. Revisit if it becomes a real constraint. |
-| Builder/spawn API | Ergonomic wrapper over create + add components + attach. Build after core stabilizes. |
+### v0 — Proof of Concept
+
+Kernel on a worklet thread. Sprites on screen. SharedValue bridge. React has no runtime authority — scene setup is hardcoded in the kernel initializer.
+
+**v0 proves:**
+- Kernel classes instantiate inside `createWorkletRuntime`
+- `World.step(dt)` ticks on a background thread at a stable rate
+- Render snapshot crosses the thread boundary via SharedValue
+- `useRSXformBuffer` consumes the snapshot and `<Atlas>` draws sprites
+
+**Kernel prerequisites (buildable in this repo):**
+- SpritePool component
+- Render collection system (engine system, runs after transform propagation)
+- Render buffer specification (output format of render collection)
+
+**Open problems (must answer at v0):**
+- Kernel bundling: how do kernel classes get into the worklet initializer?
+- Game loop driver: what timing primitives exist in `createWorkletRuntime`?
+- SharedValue throughput: how many entities before frame drops?
+
+---
+
+### v1 — Native Buffer Transport
+
+Replace SharedValue bridge with a Nitro native module owning a triple-buffered C++ render packet. **This is a critical-path dependency** — if the engine can't sustain its target entity count, it's blocked.
+
+**v1 delivers:**
+- Nitro HybridObject with pre-allocated float buffers
+- Atomic index swap (lock-free triple buffering)
+- Game thread writes to back buffer, UI thread reads front buffer
+- Zero per-frame allocation, zero GC pressure
+
+**Open problems:**
+- Nitro module setup (C++, CMake, Xcode platform glue)
+- Exact render packet struct layout
+- Thread safety validation (no tearing, no stale reads)
+
+---
+
+### v1.1 — React Scene API
+
+React can declare the scene. The kernel processes declarations into its scene graph.
+
+**The core problem:** React's reconciler assumes it owns the tree. The kernel owns the tree. React must be a command source, not a state owner. React's diffs are against its own virtual tree — it doesn't see kernel-side mutations (physics moving an entity, a script destroying an entity).
+
+**v1.1 delivers:**
+- Command channel: React → kernel (create, destroy, attach, set properties)
+- Entity handle mapping: React can refer to kernel entities after creation
+- Property ownership contract: which properties React controls vs kernel controls
+
+**Open problems:**
+- Handle mapping: string names? returned IDs? UUID registry?
+- Stale handle: if the kernel destroys an entity, React still holds a handle — how is React notified?
+- One-way vs two-way: does React ever need to read kernel state?
+
+---
+
+### v1.2 — Input
+
+Without input this is a simulation engine, not a game engine.
+
+**The input model:** Input events fire on the UI thread (touch, gesture). The kernel reads input STATE each frame, not individual events. Each frame, the kernel samples a pre-written input snapshot.
+
+**v1.2 delivers:**
+- Input state structure (touch positions, active touches, button states)
+- SharedValue written by gesture handler on UI thread, read by kernel per frame
+- Input system (engine system) that copies input state into kernel-accessible storage
+
+**Open problems:**
+- Gesture library: react-native-gesture-handler vs raw touch events?
+- Input abstraction: raw touches vs virtual buttons/joysticks?
+- Input latency: one frame behind (kernel reads previous frame's input)
+
+---
+
+### v1.3 — React Reconciler & Production API (First Shippable Version)
+
+The full developer-facing API. Production-ready core. The focus of this version is the API, not just the reconciler.
+
+**v1.3 delivers:**
+- Custom React reconciler: JSX maps to kernel operations
+- Per-node scripts with lifecycle hooks (`onReady`, `onUpdate`, `onDestroy`)
+- Engine system auto-registration (transforms, render collection are automatic)
+- Builder/spawn API for ergonomic entity creation
+- Comprehensive documentation
+
+---
+
+### v2 — Feature Complete
+
+Full horizontal feature set. Production documentation. The complete game engine.
+
+**v2 horizontal features:**
+- Animations (kernel system: AnimationPool + AnimationSystem advancing sprite frames)
+- Physics (kernel system: velocity integration, collision detection, spatial data structure)
+- Particles (dedicated lightweight pool, separate from entity system)
+- Sound (kernel emits sound events via output channel, played on JS/native thread)
+- Events / messaging bus (collision events, lifecycle events, custom events)
+- Lifecycle hooks (onReady, onUpdate, onDestroy — may move to v1.3)
+- Camera / viewport (camera node, screen-space transform in render collection)
+- Z-ordering / draw layers (z-index component or tree-order, sorted render output)
+- Non-sprite rendering (circles, rects, paths — type-tagged render buffer, imperative Skia canvas)
+- Text rendering
+- Scene management (load/unload/transition)
+- Asset pipeline (sprite sheet definitions, animation sequence definitions)
+
+---
+
+## Kernel Work Remaining (solvable in this repo now)
+
+These features can be designed, implemented, and tested in this repo with no React Native dependency. The kernel's mathematical guarantees hold regardless of runtime.
+
+| Feature | What it is | Boundary-dependent? |
+|---|---|---|
+| SpritePool | ComponentPool subclass storing spriteType per entity | No |
+| Render collection system | Engine system: iterates renderable pools + world transforms, writes render buffer | Output FORMAT is (will need validation at v0) |
+| Camera transform | Inverse RSXform composition: `screen = inv(camera) × entity` | No |
+| Z-index component | Storage column or pool for draw ordering | No |
+| Animation component + system | Pool (anim state) + system (advance frames, write spriteType) | No |
+| Input state structure | Data layout the kernel reads each frame (positions, buttons) | FORMAT is (will need validation at v0) |
+| Fixed timestep loop | Accumulator pattern, testable with fake time | No |
+| Event output buffer | Discrete events emitted by kernel per frame (sound, lifecycle) | FORMAT is (will need validation at v0) |
+
+Items marked "boundary-dependent" means the kernel-side logic is correct regardless, but the exact data layout may need adjustment when the consumer (Skia/SharedValue/Nitro) is wired up. Design these with a clean interface so the format is swappable.
+
+---
+
+## Open Architecture Decisions
+
+| Decision | Affects | When needed |
+|---|---|---|
+| Render buffer type-tagging: sprite-only vs extensible (circles, rects) | Render collection system, UI bridge | Before render collection impl |
+| Z-ordering strategy: tree-order vs z-index component vs y-sort | Render collection, SpritePool | Before render collection impl |
+| Camera: dedicated node vs storage column vs render-time offset | Render collection system | Before render collection impl |
+| Entity handle mapping: names vs IDs vs UUIDs | React ↔ kernel command channel | Before v1.1 |
+| Particle path: full entities vs dedicated lightweight pool | Particle system, render collection | Before v2 |
+| Fixed vs variable timestep | Game loop driver | Before v0 |
+| Repo structure: standalone kernel package + separate RN app (monorepo) vs single repo | Project organization | Before v0 |
