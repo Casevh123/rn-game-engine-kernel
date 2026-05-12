@@ -1,127 +1,122 @@
-import {FlatWorld} from "./FlatWorld";
 import {NULL} from "./constants";
-import {NodeHandle} from "./types";
+import {NodeHandle, ComponentPool, FlatWorld} from "./types";
 
-export abstract class ComponentPool {
-    private readonly nodeToComponent: Int32Array;
-    private readonly componentToNode: Int32Array;
-    private readonly componentToVersion: Int32Array;
-    private readonly _world: FlatWorld;
-    private readonly _capacity: number;
-    private _count: number;
+/**
+ * Creates a component pool that maps node IDs to dense component indices.
+ *
+ * @param world - The world this pool belongs to
+ * @param poolCapacity - Maximum number of components in this pool
+ * @param swapComponentData - User-provided callback to swap component data
+ *   at two indices during remove (swap-and-pop). This is where the user's
+ *   TypedArray data gets swapped.
+ */
+export function createComponentPool(
+    world: FlatWorld,
+    poolCapacity: number,
+    swapComponentData: (indexA: number, indexB: number) => void,
+): ComponentPool {
+    const nodeToComponent = new Int32Array(world.capacity);
+    const componentToNode = new Int32Array(poolCapacity);
+    const componentToVersion = new Int32Array(poolCapacity);
 
-    constructor(world: FlatWorld, capacity: number) {
-        this._world = world;
-        this._capacity = capacity;
+    nodeToComponent.fill(NULL);
+    let count: number = 0;
 
-        this.nodeToComponent = new Int32Array(this._world.capacity);
-        this.componentToNode = new Int32Array(capacity);
-        this.componentToVersion = new Int32Array(capacity);
+    function add(ref: NodeHandle): number {
+        world.assertValidRef(ref);
 
-        this.nodeToComponent.fill(NULL);
-        this._count = 0;
-    }
-
-    get count(): number {
-        return this._count;
-    }
-
-    get capacity(): number {
-        return this._capacity;
-    }
-
-    protected abstract swapComponentData(indexA: number, indexB: number): void;
-
-    add(ref: NodeHandle): number {
-        this._world.assertValidRef(ref);
-
-        if (this.nodeToComponent[ref.id] !== NULL) {
+        if (nodeToComponent[ref.id] !== NULL) {
             throw new Error("Node already has this component");
         }
 
-        if (this._count >= this._capacity) {
+        if (count >= poolCapacity) {
             throw new Error("Component pool at capacity");
         }
 
-        const compId: number = this._count;
-        this.nodeToComponent[ref.id] = compId;
-        this.componentToNode[compId] = ref.id;
-        this.componentToVersion[compId] = ref.version;
-        this._count++;
+        const compId: number = count;
+        nodeToComponent[ref.id] = compId;
+        componentToNode[compId] = ref.id;
+        componentToVersion[compId] = ref.version;
+        count++;
         return compId;
     }
 
-    remove(ref: NodeHandle): void {
-        this._world.assertValidRef(ref);
+    function remove(ref: NodeHandle): void {
+        world.assertValidRef(ref);
 
-        if (this.nodeToComponent[ref.id] === NULL) {
+        if (nodeToComponent[ref.id] === NULL) {
             throw new Error("Node does not have this component");
         }
 
-        this._removeByNodeId(ref.id);
+        _removeByNodeId(ref.id);
     }
 
-    has(ref: NodeHandle): boolean {
-        this._world.assertValidRef(ref);
-
-        return this.nodeToComponent[ref.id] !== NULL;
+    function has(ref: NodeHandle): boolean {
+        world.assertValidRef(ref);
+        return nodeToComponent[ref.id] !== NULL;
     }
 
-    get(ref: NodeHandle): number {
-        this._world.assertValidRef(ref);
+    function get(ref: NodeHandle): number {
+        world.assertValidRef(ref);
 
-        if (this.nodeToComponent[ref.id] === NULL) {
+        if (nodeToComponent[ref.id] === NULL) {
             throw new Error("Node does not have this component");
         }
 
-        return this.nodeToComponent[ref.id];
+        return nodeToComponent[ref.id];
     }
 
-    getByNodeId(nodeId: number): number {
-        return this.nodeToComponent[nodeId];
+    function getByNodeId(nodeId: number): number {
+        return nodeToComponent[nodeId];
     }
 
-    getNodeHandle(index: number): NodeHandle {
-        const id: number = this.nodeIdAt(index); // verifies index
-
-        return { id, version: this.componentToVersion[index] };
+    function getNodeHandle(index: number): NodeHandle {
+        const id: number = nodeIdAt(index);
+        return { id, version: componentToVersion[index] };
     }
 
-    nodeIdAt(index: number): number {
-        if (index < 0 || index >= this._count) {
+    function nodeIdAt(index: number): number {
+        if (index < 0 || index >= count) {
             throw new Error("Index out of bounds");
         }
-
-        return this.componentToNode[index];
+        return componentToNode[index];
     }
 
-    belongsTo(world: FlatWorld): boolean {
-        return this._world === world;
+    function belongsTo(w: FlatWorld): boolean {
+        return world === w;
     }
 
-    /**
-     * @internal
-     *
-     * no ref validation, caller handles that
-     */
-    _removeByNodeId(nodeId: number): void {
-        const compId: number = this.nodeToComponent[nodeId];
+    function _removeByNodeId(nodeId: number): void {
+        const compId: number = nodeToComponent[nodeId];
 
         if (compId === NULL) {
-            // no-op: node doesn't have this component
             return;
         }
 
-        const lastIdx: number = this._count - 1;
+        const lastIdx: number = count - 1;
         if (compId !== lastIdx) {
-            const moveNodeId: number = this.componentToNode[lastIdx];
-            this.swapComponentData(compId, lastIdx);
-            this.componentToNode[compId] = this.componentToNode[lastIdx];
-            this.componentToVersion[compId] = this.componentToVersion[lastIdx];
-            this.nodeToComponent[moveNodeId] = compId;
+            const moveNodeId: number = componentToNode[lastIdx];
+            swapComponentData(compId, lastIdx);
+            componentToNode[compId] = componentToNode[lastIdx];
+            componentToVersion[compId] = componentToVersion[lastIdx];
+            nodeToComponent[moveNodeId] = compId;
         }
 
-        this.nodeToComponent[nodeId] = NULL;
-        this._count--;
+        nodeToComponent[nodeId] = NULL;
+        count--;
     }
+
+    return {
+        get count() { return count; },
+        get capacity() { return poolCapacity; },
+        add,
+        remove,
+        has,
+        get,
+        getByNodeId,
+        getNodeHandle,
+        nodeIdAt,
+        belongsTo,
+        _removeByNodeId,
+    };
 }

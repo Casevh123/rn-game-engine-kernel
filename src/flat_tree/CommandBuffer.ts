@@ -1,43 +1,39 @@
-import {FlatWorld} from "./FlatWorld";
-import {NodeHandle} from "./types";
+import {NodeHandle, CommandBuffer, FlatWorld} from "./types";
 
-export class CommandBuffer {
-    private _world: FlatWorld;
-    private _queue: Array<() => void> = [];
+export function createCommandBuffer(world: FlatWorld): CommandBuffer {
+    let queue: Array<() => void> = [];
 
-    constructor(world: FlatWorld) {
-        this._world = world;
-    }
+    return {
+        destroy(ref: NodeHandle): void {
+            queue.push((): void => world.destroy(ref));
+        },
 
-    destroy(ref: NodeHandle): void {
-        this._queue.push((): void => this._world.destroy(ref));
-    }
+        attach(child: NodeHandle, parent: NodeHandle): void {
+            queue.push((): void => world.attach(child, parent));
+        },
 
-    attach(child: NodeHandle, parent: NodeHandle): void {
-        this._queue.push((): void => this._world.attach(child, parent));
-    }
+        detach(child: NodeHandle): void {
+            queue.push((): void => world.detach(child));
+        },
 
-    detach(child: NodeHandle): void {
-        this._queue.push((): void => this._world.detach(child));
-    }
+        reparent(node: NodeHandle, newParent: NodeHandle): void {
+            queue.push((): void => world.reparent(node, newParent));
+        },
 
-    reparent(node: NodeHandle, newParent: NodeHandle): void {
-        this._queue.push((): void => this._world.reparent(node, newParent));
-    }
+        flush(): void {
+            const commands: Array<() => void> = queue;
+            queue = [];
+            for (const cmd of commands) {
+                cmd();
+            }
+        },
 
-    flush(): void {
-        const commands: Array<() => void> = this._queue;
-        this._queue = [];
-        for (const cmd of commands) {
-            cmd();
-        }
-    }
+        clear(): void {
+            queue = [];
+        },
 
-    clear(): void {
-        this._queue = [];
-    }
-
-    get size(): number {
-        return this._queue.length;
-    }
+        get size(): number {
+            return queue.length;
+        },
+    };
 }

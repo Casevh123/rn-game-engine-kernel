@@ -1,13 +1,13 @@
-import {FlatWorld} from "../FlatWorld";
-import {NodeHandle, refEquals} from "../types";
-import {CommandBuffer} from "../CommandBuffer";
-import {ComponentPool} from "../ComponentPool";
+import {createFlatWorld} from "../FlatWorld";
+import {createCommandBuffer} from "../CommandBuffer";
+import {createComponentPool} from "../ComponentPool";
+import {NodeHandle, refEquals, FlatWorld, CommandBuffer, ComponentPool} from "../types";
 
 describe('command-buffer test', () => {
     describe('happy paths', () => {
         it('enqueue destroy, node alive after enqueue, dead after flush', () => {
-            const world: FlatWorld = new FlatWorld(10);
-            const buffer: CommandBuffer = new CommandBuffer(world);
+            const world: FlatWorld = createFlatWorld(10);
+            const buffer: CommandBuffer = createCommandBuffer(world);
             const node: NodeHandle = world.createNode();
 
             buffer.destroy(node);
@@ -18,8 +18,8 @@ describe('command-buffer test', () => {
         })
 
         it('enqueue attach, child unattached after enqueue, attached after flush', () => {
-            const world: FlatWorld = new FlatWorld(10);
-            const buffer: CommandBuffer = new CommandBuffer(world);
+            const world: FlatWorld = createFlatWorld(10);
+            const buffer: CommandBuffer = createCommandBuffer(world);
             const node: NodeHandle = world.createNode();
 
             buffer.attach(node, world.root);
@@ -30,8 +30,8 @@ describe('command-buffer test', () => {
         })
 
         it('enqueue detach, child attached after enqueue, unattached after flush', () => {
-            const world: FlatWorld = new FlatWorld(10);
-            const buffer: CommandBuffer = new CommandBuffer(world);
+            const world: FlatWorld = createFlatWorld(10);
+            const buffer: CommandBuffer = createCommandBuffer(world);
             const node: NodeHandle = world.createNode();
 
             world.attach(node, world.root);
@@ -43,8 +43,8 @@ describe('command-buffer test', () => {
         })
 
         it('enqueue reparent, node under old parent after enqueue, under new after flush', () => {
-            const world: FlatWorld = new FlatWorld(10);
-            const buffer: CommandBuffer = new CommandBuffer(world);
+            const world: FlatWorld = createFlatWorld(10);
+            const buffer: CommandBuffer = createCommandBuffer(world);
             const oldParent: NodeHandle = world.createNode();
             const newParent: NodeHandle = world.createNode();
             const child: NodeHandle = world.createNode();
@@ -63,8 +63,8 @@ describe('command-buffer test', () => {
         })
 
         it('increments size after enqueue', () => {
-            const world: FlatWorld = new FlatWorld(10);
-            const buffer: CommandBuffer = new CommandBuffer(world);
+            const world: FlatWorld = createFlatWorld(10);
+            const buffer: CommandBuffer = createCommandBuffer(world);
             const node: NodeHandle = world.createNode();
 
             expect(buffer.size).toBe(0);
@@ -74,8 +74,8 @@ describe('command-buffer test', () => {
         })
 
         it('size is 0 after flush', () => {
-            const world: FlatWorld = new FlatWorld(10);
-            const buffer: CommandBuffer = new CommandBuffer(world);
+            const world: FlatWorld = createFlatWorld(10);
+            const buffer: CommandBuffer = createCommandBuffer(world);
             const node: NodeHandle = world.createNode();
 
             buffer.destroy(node);
@@ -86,8 +86,8 @@ describe('command-buffer test', () => {
         })
 
         it('clear() clears the queue but doesn\'t run commands', () => {
-            const world: FlatWorld = new FlatWorld(10);
-            const buffer: CommandBuffer = new CommandBuffer(world);
+            const world: FlatWorld = createFlatWorld(10);
+            const buffer: CommandBuffer = createCommandBuffer(world);
             const node: NodeHandle = world.createNode();
 
             buffer.destroy(node);
@@ -99,8 +99,8 @@ describe('command-buffer test', () => {
         })
 
         it('second flush after first flush is no-op, size stays 0 (doesn\'t throw)', () => {
-            const world: FlatWorld = new FlatWorld(10);
-            const buffer: CommandBuffer = new CommandBuffer(world);
+            const world: FlatWorld = createFlatWorld(10);
+            const buffer: CommandBuffer = createCommandBuffer(world);
             const node: NodeHandle = world.createNode();
 
             buffer.destroy(node);
@@ -112,8 +112,8 @@ describe('command-buffer test', () => {
         })
 
         it('buffer is reusable — enqueue after flush works, second flush executes new commands', () => {
-            const world: FlatWorld = new FlatWorld(10);
-            const buffer: CommandBuffer = new CommandBuffer(world);
+            const world: FlatWorld = createFlatWorld(10);
+            const buffer: CommandBuffer = createCommandBuffer(world);
             const node: NodeHandle = world.createNode();
 
             buffer.attach(node, world.root);
@@ -130,8 +130,8 @@ describe('command-buffer test', () => {
 
     describe('Ordering', () => {
         it('FIFO — enqueue destroy(A) then destroy(B), A destroyed before B', () => {
-            const world: FlatWorld = new FlatWorld(10);
-            const buffer: CommandBuffer = new CommandBuffer(world);
+            const world: FlatWorld = createFlatWorld(10);
+            const buffer: CommandBuffer = createCommandBuffer(world);
             const nodeA: NodeHandle = world.createNode();
             const nodeB: NodeHandle = world.createNode();
 
@@ -144,8 +144,8 @@ describe('command-buffer test', () => {
         })
 
         it('FIFO — enqueue attach then reparent on same node, both succeed in order', () => {
-            const world: FlatWorld = new FlatWorld(10);
-            const buffer: CommandBuffer = new CommandBuffer(world);
+            const world: FlatWorld = createFlatWorld(10);
+            const buffer: CommandBuffer = createCommandBuffer(world);
             const nodeA: NodeHandle = world.createNode();
             const nodeB: NodeHandle = world.createNode();
 
@@ -160,8 +160,8 @@ describe('command-buffer test', () => {
 
     describe('Error Cases', () => {
         it('flush throws when destroying an already dead node (double destroy)', () => {
-            const world: FlatWorld = new FlatWorld(10);
-            const buffer: CommandBuffer = new CommandBuffer(world);
+            const world: FlatWorld = createFlatWorld(10);
+            const buffer: CommandBuffer = createCommandBuffer(world);
             const node: NodeHandle = world.createNode();
 
             buffer.destroy(node);
@@ -171,8 +171,8 @@ describe('command-buffer test', () => {
         })
 
         it('flush throws when attaching node that already has parent', () => {
-            const world: FlatWorld = new FlatWorld(10);
-            const buffer: CommandBuffer = new CommandBuffer(world);
+            const world: FlatWorld = createFlatWorld(10);
+            const buffer: CommandBuffer = createCommandBuffer(world);
             const nodeA: NodeHandle = world.createNode();
             const nodeB: NodeHandle = world.createNode();
 
@@ -184,8 +184,8 @@ describe('command-buffer test', () => {
         })
 
         it('flush throws on detach of parentless node', () => {
-            const world: FlatWorld = new FlatWorld(10);
-            const buffer: CommandBuffer = new CommandBuffer(world);
+            const world: FlatWorld = createFlatWorld(10);
+            const buffer: CommandBuffer = createCommandBuffer(world);
             const node: NodeHandle = world.createNode();
 
             buffer.detach(node);
@@ -194,8 +194,8 @@ describe('command-buffer test', () => {
         })
 
         it('flush throws on reparent creating cycle', () => {
-            const world: FlatWorld = new FlatWorld(10);
-            const buffer: CommandBuffer = new CommandBuffer(world);
+            const world: FlatWorld = createFlatWorld(10);
+            const buffer: CommandBuffer = createCommandBuffer(world);
             const nodeA: NodeHandle = world.createNode();
             const nodeB: NodeHandle = world.createNode();
             const nodeC: NodeHandle = world.createNode();
@@ -210,26 +210,14 @@ describe('command-buffer test', () => {
     })
 
     describe('World integration', () => {
-        class TestPool extends ComponentPool {
-            values: Int32Array;
-
-            constructor(world: FlatWorld, capacity: number) {
-                super(world, capacity);
-                this.values = new Int32Array(capacity).fill(0);
-            }
-
-            protected swapComponentData(a: number, b: number): void {
-                const tmp = this.values[a];
-                this.values[a] = this.values[b];
-                this.values[b] = tmp;
-            }
-        }
-
         it('destroy via command buffer triggers registered pool cleanup', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const node: NodeHandle = world.createNode();
-            const buffer: CommandBuffer = new CommandBuffer(world);
-            const pool: TestPool = new TestPool(world, 5);
+            const buffer: CommandBuffer = createCommandBuffer(world);
+            const values = new Int32Array(5).fill(0);
+            const pool: ComponentPool = createComponentPool(world, 5, (a, b) => {
+                const tmp = values[a]; values[a] = values[b]; values[b] = tmp;
+            });
             world.registerPool(pool);
 
             pool.add(node);
@@ -241,13 +229,16 @@ describe('command-buffer test', () => {
         })
 
         it('destroy subtree via command buffer removes all descendent components', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const root: NodeHandle = world.root;
             const node1: NodeHandle = world.createNode();
             const node2: NodeHandle = world.createNode();
             const node3: NodeHandle = world.createNode();
-            const pool: TestPool = new TestPool(world, 5);
-            const buffer: CommandBuffer = new CommandBuffer(world);
+            const values = new Int32Array(5).fill(0);
+            const pool: ComponentPool = createComponentPool(world, 5, (a, b) => {
+                const tmp = values[a]; values[a] = values[b]; values[b] = tmp;
+            });
+            const buffer: CommandBuffer = createCommandBuffer(world);
             world.registerPool(pool);
 
             world.attach(node1, root);

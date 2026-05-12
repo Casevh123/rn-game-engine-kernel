@@ -1,10 +1,9 @@
-import {FlatWorld} from "../FlatWorld";
-import {System, NodeHandle, refEquals} from "../types";
-import {FlatTreeStorage} from "../FlatTreeStorage";
+import {createFlatWorld} from "../FlatWorld";
+import {System, NodeHandle, refEquals, FlatWorld, FlatTreeStorage} from "../types";
 
 describe('Root behaviour', () => {
     it('Root with identity local → world is identity after step', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const propagation: System = world.createTransformPropagationSystem();
         const root: NodeHandle = world.root;
         const storage: FlatTreeStorage = world.getStorage();
@@ -20,7 +19,7 @@ describe('Root behaviour', () => {
     })
 
     it('Root with non-identity local → world equals local', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const propagation: System = world.createTransformPropagationSystem();
         const root: NodeHandle = world.root;
 
@@ -33,7 +32,7 @@ describe('Root behaviour', () => {
 
 describe('Singe parent child -- translation', () => {
     it('Parent at origin, child translated (5, 10) — child world position is (5, 10).', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const propagation: System = world.createTransformPropagationSystem();
         const parent: NodeHandle = world.root;
         const child: NodeHandle = world.createNode();
@@ -46,7 +45,7 @@ describe('Singe parent child -- translation', () => {
     })
 
     it('Parent translated (10, 20), child translated (5, 0) — child world position is (15, 20).', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const propagation: System = world.createTransformPropagationSystem();
         const parent: NodeHandle = world.root;
         const child: NodeHandle = world.createNode();
@@ -62,7 +61,7 @@ describe('Singe parent child -- translation', () => {
 
 describe('Single parent-child — rotation only', () => {
     it('Parent rotated 90° (a=0, b=1), child at (1, 0) — child world position is (0, 1).', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const propagation: System = world.createTransformPropagationSystem();
         const parent: NodeHandle = world.root;
         const child: NodeHandle = world.createNode();
@@ -77,7 +76,7 @@ describe('Single parent-child — rotation only', () => {
     })
 
     it('Parent rotated 90°, child at (0, 1) — child world position is (-1, 0).', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const propagation: System = world.createTransformPropagationSystem();
         const parent: NodeHandle = world.root;
         const child: NodeHandle = world.createNode();
@@ -92,7 +91,7 @@ describe('Single parent-child — rotation only', () => {
     })
 
     it('Parent rotated 45°, child at (1, 0) — child world position ≈ (cos45, sin45)', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const propagation: System = world.createTransformPropagationSystem();
         const parent: NodeHandle = world.root;
         const child: NodeHandle = world.createNode();
@@ -109,7 +108,7 @@ describe('Single parent-child — rotation only', () => {
 
 describe('Single parent-child — scale only', () => {
     it('Parent scaled 2 (a=2, b=0), child at (3, 4) — child world position is (6, 8)', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const propagation: System = world.createTransformPropagationSystem();
         const parent: NodeHandle = world.root;
         const child: NodeHandle = world.createNode();
@@ -124,7 +123,7 @@ describe('Single parent-child — scale only', () => {
     })
 
     it('Parent scaled 0.5, child at (10, 0) — child world position is (5, 0)', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const propagation: System = world.createTransformPropagationSystem();
         const parent: NodeHandle = world.root;
         const child: NodeHandle = world.createNode();
@@ -141,7 +140,7 @@ describe('Single parent-child — scale only', () => {
 
 describe('Single parent-child — combined rotation + scale', () => {
     it('Parent pos(10,0) rot(90°) scale(2), child at (1,0) — child world position (10, 2), child world a≈0, b≈2 (scale 2, rotation 90°)', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const propagation: System = world.createTransformPropagationSystem();
         const parent: NodeHandle = world.root;
         const child: NodeHandle = world.createNode();
@@ -155,7 +154,7 @@ describe('Single parent-child — combined rotation + scale', () => {
     })
 
     it('Parent pos(0,0) rot(45°) scale(2), child at (1,0)', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const propagation: System = world.createTransformPropagationSystem();
         const parent: NodeHandle = world.root;
         const child: NodeHandle = world.createNode();
@@ -175,7 +174,7 @@ describe('Single parent-child — combined rotation + scale', () => {
 
 describe('Multi-level chains', () => {
     it('Three-level translation chain — grandparent tx=10, parent tx=5, child tx=1. Child world tx = 16.', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const grandParent: NodeHandle = world.root;
         const parent: NodeHandle = world.createNode();
         const child: NodeHandle = world.createNode();
@@ -194,7 +193,7 @@ describe('Multi-level chains', () => {
     })
 
     it('Three-level with rotation — grandparent rot(90°), parent pos(1,0), child pos(1,0)', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const grandParent: NodeHandle = world.root;
         const parent: NodeHandle = world.createNode();
         const child: NodeHandle = world.createNode();
@@ -213,7 +212,7 @@ describe('Multi-level chains', () => {
     })
 
     it('Three-level with scale — grandparent scale(2), parent scale(3), child pos(1,0). Child world tx = 6, child world scale = 6.', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const grandParent: NodeHandle = world.root;
         const parent: NodeHandle = world.createNode();
         const child: NodeHandle = world.createNode();
@@ -234,7 +233,7 @@ describe('Multi-level chains', () => {
     })
 
     it('Rotation compounds through chain — grandparent rot(45°), parent rot(45°). Child world rotation ≈ 90°', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const grandParent: NodeHandle = world.root;
         const parent: NodeHandle = world.createNode();
         const child: NodeHandle = world.createNode();
@@ -254,7 +253,7 @@ describe('Multi-level chains', () => {
 
 describe('Sibling Independence', () => {
     it('Siblings get independent world transforms', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const parent: NodeHandle = world.root;
         const sibling1: NodeHandle = world.createNode();
         const sibling2: NodeHandle = world.createNode();
@@ -271,7 +270,7 @@ describe('Sibling Independence', () => {
     })
 
     it('Modifying one child\'s local doesn\'t affect sibling after re-propagation', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const parent: NodeHandle = world.root;
         const sibling1: NodeHandle = world.createNode();
         const sibling2: NodeHandle = world.createNode();
@@ -291,7 +290,7 @@ describe('Sibling Independence', () => {
 
 describe('Mutation between frames', () => {
     it('Change parent local position, re-propagate → child world position updates', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const parent: NodeHandle = world.root;
         const child: NodeHandle = world.createNode();
         world.attach(child, parent);
@@ -308,7 +307,7 @@ describe('Mutation between frames', () => {
     })
 
     it('Change parent local rotation, re-propagate → child world position rotates', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const parent: NodeHandle = world.root;
         const child: NodeHandle = world.createNode();
         world.attach(child, parent);
@@ -331,7 +330,7 @@ describe('Mutation between frames', () => {
 
 describe('Structural mutation interaction', () => {
     it('Reparent via command buffer → child\'s world reflects new parent after step', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const parentA: NodeHandle = world.createNode();
         const parentB: NodeHandle = world.createNode();
         const child: NodeHandle = world.createNode();
@@ -358,7 +357,7 @@ describe('Structural mutation interaction', () => {
     })
 
     it('Destroy child, surviving sibling\'s world still correct after re-propagation', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const parent: NodeHandle = world.createNode();
         const siblingA: NodeHandle = world.createNode();
         const siblingB: NodeHandle = world.createNode();
@@ -383,7 +382,7 @@ describe('Structural mutation interaction', () => {
     })
 
     it('Destroyed node\'s transform slots reset on reallocation', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const doomedNode: NodeHandle = world.createNode();
 
         world.setLocalTransform(doomedNode, 10, 10, 10, 10);

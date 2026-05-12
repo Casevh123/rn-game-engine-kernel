@@ -1,22 +1,21 @@
-import {FlatWorld} from "../FlatWorld";
-import {NodeHandle, refEquals} from "../types";
-import {NULL, ROOT_ID} from "../constants";
+import {createFlatWorld} from "../FlatWorld";
+import {NodeHandle, refEquals, FlatWorld} from "../types";
 
 describe('basic world tests', () => {
     it('world creates valid root ref', () => {
-         const world: FlatWorld = new FlatWorld(10);
+         const world: FlatWorld = createFlatWorld(10);
          expect(() => world.assertValidRef(world.root)).not.toThrow();
     })
 
     it('createNode returns a valid ref', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const node: NodeHandle = world.createNode();
 
         expect(() => world.assertValidRef(node)).not.toThrow();
     })
 
     it('stale ref fails after invalid', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const doomedNode: NodeHandle = world.createNode();
         world.destroy(doomedNode);
         const reincarnatedNode: NodeHandle = world.createNode();
@@ -26,14 +25,14 @@ describe('basic world tests', () => {
     })
 
     it('enabled defaults to true', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const node: NodeHandle = world.createNode();
 
         expect(world.isEnabled(node)).toBe(true);
     })
 
     it('getParent gets parent', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const node: NodeHandle = world.createNode();
         world.attach(node, world.root);
 
@@ -41,7 +40,7 @@ describe('basic world tests', () => {
     })
 
     it('getParent returns correct version', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const child: NodeHandle = world.createNode();
         const doomedParent: NodeHandle = world.createNode();
         world.destroy(doomedParent);
@@ -55,13 +54,13 @@ describe('basic world tests', () => {
     })
 
     it('getParent returns null for root', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
 
         expect(world.getParent(world.root)).toBeNull();
     })
 
     it('getParentFails for if reference is stale', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const doomedNode: NodeHandle = world.createNode();
         world.destroy(doomedNode);
         const reincarnatedNode: NodeHandle = world.createNode();
@@ -71,7 +70,7 @@ describe('basic world tests', () => {
     })
 
     it('getChildren gets children', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const node: NodeHandle = world.createNode();
         world.attach(node, world.root);
 
@@ -79,7 +78,7 @@ describe('basic world tests', () => {
     })
 
     it('getChildren returns correct version', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const parent: NodeHandle = world.createNode();
         const doomedChild: NodeHandle = world.createNode();
         world.destroy(doomedChild);
@@ -94,7 +93,7 @@ describe('basic world tests', () => {
 
 
     it('getChildren fails if reference is stale', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const doomedNode: NodeHandle = world.createNode();
         world.destroy(doomedNode);
         const reincarnatedNode: NodeHandle = world.createNode();
@@ -104,13 +103,13 @@ describe('basic world tests', () => {
     })
 
     it('isAlive returns alive for nodes that are part of the tee', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
 
         expect(world.isAlive(world.root)).toBe(true);
     })
 
     it('isAlive returns false for nodes that have been removed', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const node: NodeHandle = world.createNode();
 
         expect(world.isAlive(node)).toBe(true);
@@ -122,7 +121,7 @@ describe('basic world tests', () => {
 
 describe('mutation tests', () => {
     it('attach set child parent', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const node: NodeHandle = world.createNode();
         world.attach(node, world.root);
 
@@ -130,7 +129,7 @@ describe('mutation tests', () => {
     })
 
     it('attach inserts child into parents firstChild list', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const root: NodeHandle = world.root;
         const node: NodeHandle = world.createNode();
         world.attach(node, world.root);
@@ -139,7 +138,7 @@ describe('mutation tests', () => {
     })
 
     it('attaching inserts at the front', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const node1: NodeHandle = world.createNode();
         const node2: NodeHandle = world.createNode();
         const node3: NodeHandle = world.createNode();
@@ -155,7 +154,7 @@ describe('mutation tests', () => {
     })
 
     it('detach clears parent', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const node: NodeHandle = world.createNode();
 
         world.attach(node, world.root);
@@ -165,7 +164,7 @@ describe('mutation tests', () => {
     })
 
     it('detach removes first child correctly', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const node1: NodeHandle = world.createNode();
         const node2: NodeHandle = world.createNode();
         const node3: NodeHandle = world.createNode();
@@ -181,7 +180,7 @@ describe('mutation tests', () => {
     })
 
     it('detach removes middle child correctly', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const node1: NodeHandle = world.createNode();
         const node2: NodeHandle = world.createNode();
         const node3: NodeHandle = world.createNode();
@@ -197,7 +196,7 @@ describe('mutation tests', () => {
     })
 
     it('detach removes last child correctly', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const node1: NodeHandle = world.createNode();
         const node2: NodeHandle = world.createNode();
         const node3: NodeHandle = world.createNode();
@@ -213,7 +212,7 @@ describe('mutation tests', () => {
     })
 
     it('detach removes only child correctly', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const node: NodeHandle = world.createNode();
         world.attach(node, world.root);
         world.detach(node);
@@ -223,7 +222,7 @@ describe('mutation tests', () => {
     })
 
     it("cannot attach a child that is stale", () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const doomedNode: NodeHandle = world.createNode();
 
         world.destroy(doomedNode);
@@ -234,7 +233,7 @@ describe('mutation tests', () => {
     });
 
     it('cannot attach root', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const node: NodeHandle = world.createNode();
         world.attach(node, world.root);
 
@@ -243,14 +242,14 @@ describe('mutation tests', () => {
     })
 
     it('cannot attach a node to itself', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const node: NodeHandle = world.createNode();
 
         expect(() => world.attach(node, node)).toThrow("Cannot attach a node to itself");
     })
 
     it('cannot attach child with existing parent', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const root: NodeHandle = world.root;
         const node1: NodeHandle = world.createNode();
         const node2: NodeHandle = world.createNode();
@@ -261,7 +260,7 @@ describe('mutation tests', () => {
     })
 
     it('cannot detach a stale reference', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const doomedNode: NodeHandle = world.createNode();
 
         world.destroy(doomedNode);
@@ -273,14 +272,14 @@ describe('mutation tests', () => {
 
 
     it('cannot detach root', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const root: NodeHandle = world.root;
 
         expect(() => world.detach(root)).toThrow("Cannot detach root")
     })
 
     it('cannot detach parentless node', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const node: NodeHandle = world.createNode();
 
         expect(() => world.detach(node)).toThrow("Node has no parent");

@@ -1,190 +1,211 @@
-import {FlatTreeStorage} from "./FlatTreeStorage";
+import {createFlatTreeStorage} from "./FlatTreeStorage";
 import {NULL, ROOT_ID} from "./constants";
-import {ComponentPool} from "./ComponentPool";
-import {CommandBuffer} from "./CommandBuffer";
-import {System, NodeHandle} from "./types";
+import {createCommandBuffer} from "./CommandBuffer";
+import {NodeHandle, System, FlatWorld, ComponentPool, FlatTreeStorage} from "./types";
 
-export class FlatWorld {
-    private _storage: FlatTreeStorage;
-    readonly root: NodeHandle;
-    private _pools: Set<ComponentPool> = new Set();
-    private _systems: System[] = [];
-    private _stepping: boolean = false;
-    readonly commandBuffer: CommandBuffer;
+export function createFlatWorld(capacity: number): FlatWorld {
+    const storage: FlatTreeStorage = createFlatTreeStorage(capacity);
+    const root: NodeHandle = { id: ROOT_ID, version: storage.version[ROOT_ID] };
+    const pools: Set<ComponentPool> = new Set();
+    const systems: System[] = [];
+    let stepping: boolean = false;
 
-    constructor(capacity: number) {
-        this._storage = new FlatTreeStorage(capacity);
-        this.root = { id: ROOT_ID, version: this._storage.version[ROOT_ID] };
-        this.commandBuffer = new CommandBuffer(this);
-    }
+    // We need a forward reference because commandBuffer captures `world`,
+    // and `world` is what we return. We build the world object first, then
+    // create the command buffer referencing it.
+    const world: FlatWorld = {
+        root,
+        get capacity() { return storage.capacity; },
+        commandBuffer: null as any, // assigned immediately below
+        createNode,
+        assertValidRef,
+        isEnabled,
+        setEnabled,
+        getParent,
+        getChildren,
+        isAlive,
+        attach,
+        detach,
+        destroy,
+        reparent,
+        registerPool,
+        addSystem,
+        step,
+        createTransformPropagationSystem,
+        setLocalTransform,
+        getLocalTransform,
+        setLocalPosition,
+        getWorldTransform,
+        getStorage,
+    };
 
-    get capacity(): number { return this._storage.capacity; }
+    // Now create the command buffer with the real world reference
+    (world as any).commandBuffer = createCommandBuffer(world);
 
-    createNode(): NodeHandle {
-        const { id, version } = this._storage.allocate();
+    function createNode(): NodeHandle {
+        const { id, version } = storage.allocate();
         return { id, version };
     }
 
-    assertValidRef(ref: NodeHandle): void {
-        this._storage.assertValidRef(ref.id, ref.version);
+    function assertValidRef(ref: NodeHandle): void {
+        storage.assertValidRef(ref.id, ref.version);
     }
 
-    isEnabled(ref: NodeHandle): boolean {
-        this.assertValidRef(ref);
-        return this._storage.enabled[ref.id] === 1;
+    function isEnabled(ref: NodeHandle): boolean {
+        assertValidRef(ref);
+        return storage.enabled[ref.id] === 1;
     }
 
-    setEnabled(ref: NodeHandle, enabled: boolean) {
-        this.assertValidRef(ref);
-        this._storage.enabled[ref.id] = enabled ? 1 : 0;
+    function setEnabled(ref: NodeHandle, enabled: boolean) {
+        assertValidRef(ref);
+        storage.enabled[ref.id] = enabled ? 1 : 0;
     }
 
-    getParent(ref: NodeHandle): NodeHandle | null {
-        this.assertValidRef(ref);
-        if (this._storage.parent[ref.id] === NULL) {
+    function getParent(ref: NodeHandle): NodeHandle | null {
+        assertValidRef(ref);
+        if (storage.parent[ref.id] === NULL) {
             return null;
         }
 
-        const id: number = this._storage.parent[ref.id];
-        return { id, version: this._storage.version[id] };
+        const id: number = storage.parent[ref.id];
+        return { id, version: storage.version[id] };
     }
 
-    getChildren(ref: NodeHandle): NodeHandle[] {
-        this.assertValidRef(ref);
-        const bareChildren: {id: number, version: number}[] = []
-        let current: number = this._storage.firstChild[ref.id];
+    function getChildren(ref: NodeHandle): NodeHandle[] {
+        assertValidRef(ref);
+        const children: NodeHandle[] = [];
+        let current: number = storage.firstChild[ref.id];
         while (current !== NULL) {
-            bareChildren.push({id: current, version: this._storage.version[current]});
-            current = this._storage.nextSibling[current];
+            children.push({ id: current, version: storage.version[current] });
+            current = storage.nextSibling[current];
         }
-
-        return bareChildren.map(bare => ({ id: bare.id, version: bare.version }));
+        return children;
     }
 
-    isAlive(ref: NodeHandle): boolean {
-        return this._storage.alive[ref.id] === 1
-            && this._storage.version[ref.id] === ref.version;
+    function isAlive(ref: NodeHandle): boolean {
+        return storage.alive[ref.id] === 1
+            && storage.version[ref.id] === ref.version;
     }
 
-    attach(child: NodeHandle, parent: NodeHandle): void {
-        if (this._stepping) {
-            throw new Error("Cannot attach during step, use commandBuffer")
+    function attach(child: NodeHandle, parent: NodeHandle): void {
+        if (stepping) {
+            throw new Error("Cannot attach during step, use commandBuffer");
         }
 
-        this.assertValidRef(child);
-        this.assertValidRef(parent);
+        assertValidRef(child);
+        assertValidRef(parent);
 
         if (child.id === ROOT_ID) throw new Error("Cannot attach root");
         if (child.id === parent.id) throw new Error("Cannot attach a node to itself");
-        if (this._storage.parent[child.id] !== NULL) {
+        if (storage.parent[child.id] !== NULL) {
             throw new Error("Child already has parent");
         }
 
-        this._storage.parent[child.id] = parent.id;
+        storage.parent[child.id] = parent.id;
 
-        const oldFirst: number = this._storage.firstChild[parent.id];
-        this._storage.firstChild[parent.id] = child.id;
+        const oldFirst: number = storage.firstChild[parent.id];
+        storage.firstChild[parent.id] = child.id;
 
-        this._storage.prevSibling[child.id] = NULL;
-        this._storage.nextSibling[child.id] = oldFirst;
+        storage.prevSibling[child.id] = NULL;
+        storage.nextSibling[child.id] = oldFirst;
 
         if (oldFirst !== NULL) {
-            this._storage.prevSibling[oldFirst] = child.id;
+            storage.prevSibling[oldFirst] = child.id;
         }
     }
 
-    detach(child: NodeHandle): void {
-        if (this._stepping) {
-            throw new Error("Cannot detach during step, use commandBuffer")
+    function detach(child: NodeHandle): void {
+        if (stepping) {
+            throw new Error("Cannot detach during step, use commandBuffer");
         }
 
-        this.assertValidRef(child);
+        assertValidRef(child);
 
         if (child.id === ROOT_ID) throw new Error("Cannot detach root");
 
-        const parent = this._storage.parent[child.id];
-        if (parent === NULL) throw new Error("Node has no parent");
+        const parentId = storage.parent[child.id];
+        if (parentId === NULL) throw new Error("Node has no parent");
 
-        const prev = this._storage.prevSibling[child.id];
-        const next = this._storage.nextSibling[child.id];
+        const prev = storage.prevSibling[child.id];
+        const next = storage.nextSibling[child.id];
 
         if (prev !== NULL) {
-            this._storage.nextSibling[prev] = next;
+            storage.nextSibling[prev] = next;
         } else {
-            this._storage.firstChild[parent] = next;
+            storage.firstChild[parentId] = next;
         }
 
         if (next !== NULL) {
-            this._storage.prevSibling[next] = prev;
+            storage.prevSibling[next] = prev;
         }
 
-        this._storage.parent[child.id] = NULL;
-        this._storage.prevSibling[child.id] = NULL;
-        this._storage.nextSibling[child.id] = NULL;
+        storage.parent[child.id] = NULL;
+        storage.prevSibling[child.id] = NULL;
+        storage.nextSibling[child.id] = NULL;
     }
 
-    destroy(node: NodeHandle): void {
-        if (this._stepping) {
-            throw new Error("Cannot destroy during step, use commandBuffer")
+    function destroy(node: NodeHandle): void {
+        if (stepping) {
+            throw new Error("Cannot destroy during step, use commandBuffer");
         }
 
-        this.assertValidRef(node);
+        assertValidRef(node);
         if (node.id === ROOT_ID) {
             throw new Error("Cannot destroy root node");
         }
 
-        this._destroySubtree(node.id)
+        _destroySubtree(node.id);
     }
 
-    private _destroySubtree(id: number): void {
+    function _destroySubtree(id: number): void {
         const stack1: number[] = [id];
         const stack2: number[] = [];
         while (stack1.length > 0) {
             const node: number = stack1.pop()!;
             stack2.push(node);
-            let childId: number = this._storage.firstChild[node];
+            let childId: number = storage.firstChild[node];
             while (childId !== NULL) {
                 stack1.push(childId);
-                childId = this._storage.nextSibling[childId];
+                childId = storage.nextSibling[childId];
             }
         }
 
         while (stack2.length > 0) {
             const node: number = stack2.pop()!;
-            this._destroyLeaf(node);
+            _destroyLeaf(node);
         }
     }
 
-    private _destroyLeaf(id: number) {
-        const parent: number = this._storage.parent[id];
-        if (parent !== NULL) {
-            const prev: number = this._storage.prevSibling[id];
-            const next: number = this._storage.nextSibling[id];
+    function _destroyLeaf(id: number) {
+        const parentId: number = storage.parent[id];
+        if (parentId !== NULL) {
+            const prev: number = storage.prevSibling[id];
+            const next: number = storage.nextSibling[id];
 
             if (prev !== NULL) {
-                this._storage.nextSibling[prev] = next;
+                storage.nextSibling[prev] = next;
             } else {
-                this._storage.firstChild[parent] = next;
+                storage.firstChild[parentId] = next;
             }
 
             if (next !== NULL) {
-                this._storage.prevSibling[next] = prev;
+                storage.prevSibling[next] = prev;
             }
         }
 
-        for (const pool of this._pools) {
+        for (const pool of pools) {
             pool._removeByNodeId(id);
         }
-        this._storage.free(id)
+        storage.free(id);
     }
 
-    reparent(node: NodeHandle, parent: NodeHandle): void {
-        if (this._stepping) {
-            throw new Error("Cannot reparent during step, use commandBuffer")
+    function reparent(node: NodeHandle, parent: NodeHandle): void {
+        if (stepping) {
+            throw new Error("Cannot reparent during step, use commandBuffer");
         }
 
-        this.assertValidRef(node);
-        this.assertValidRef(parent);
+        assertValidRef(node);
+        assertValidRef(parent);
 
         if (node.id === ROOT_ID) {
             throw new Error("Cannot reparent root node");
@@ -194,89 +215,88 @@ export class FlatWorld {
             throw new Error("Cannot attach a node to itself");
         }
 
-        if (this._storage.parent[node.id] === NULL) {
+        if (storage.parent[node.id] === NULL) {
             throw new Error("Node does not have a parent, use attach instead");
         }
 
-        if (this._isAncestor(node.id, parent.id)) {
+        if (_isAncestor(node.id, parent.id)) {
             throw new Error("Cannot create cycle");
         }
 
-        if (this._storage.parent[node.id] === parent.id) {
+        if (storage.parent[node.id] === parent.id) {
             throw new Error("Cannot reparent to current parent");
         }
 
-        //remove from old parent
-        const oldParent: number = this._storage.parent[node.id];
-        const prev: number = this._storage.prevSibling[node.id];
-        const next: number = this._storage.nextSibling[node.id];
+        // remove from old parent
+        const oldParent: number = storage.parent[node.id];
+        const prev: number = storage.prevSibling[node.id];
+        const next: number = storage.nextSibling[node.id];
 
         if (prev !== NULL) {
-            this._storage.nextSibling[prev] = next;
+            storage.nextSibling[prev] = next;
         } else {
-            this._storage.firstChild[oldParent] = next;
+            storage.firstChild[oldParent] = next;
         }
 
         if (next !== NULL) {
-            this._storage.prevSibling[next] = prev;
+            storage.prevSibling[next] = prev;
         }
 
-        //insert into head of the new parents children list
-        this._storage.parent[node.id] = parent.id;
+        // insert into head of the new parent's children list
+        storage.parent[node.id] = parent.id;
 
-        const oldFirst: number = this._storage.firstChild[parent.id];
-        this._storage.firstChild[parent.id] = node.id;
+        const oldFirst: number = storage.firstChild[parent.id];
+        storage.firstChild[parent.id] = node.id;
 
-        this._storage.nextSibling[node.id] = oldFirst;
-        this._storage.prevSibling[node.id] = NULL;
+        storage.nextSibling[node.id] = oldFirst;
+        storage.prevSibling[node.id] = NULL;
 
         if (oldFirst !== NULL) {
-            this._storage.prevSibling[oldFirst] = node.id;
+            storage.prevSibling[oldFirst] = node.id;
         }
     }
 
-    private _isAncestor(possibleAncestorId: number, nodeId: number): boolean {
-        let current: number = this._storage.parent[nodeId];
+    function _isAncestor(possibleAncestorId: number, nodeId: number): boolean {
+        let current: number = storage.parent[nodeId];
         while (current !== NULL) {
             if (current === possibleAncestorId) return true;
-            current = this._storage.parent[current];
+            current = storage.parent[current];
         }
-
         return false;
     }
 
-    registerPool(pool: ComponentPool): void {
-        if (!pool.belongsTo(this)) throw new Error("Pool does not belong to this world");
-        if (this._pools.has(pool)) throw new Error("Pool already registered");
-        this._pools.add(pool);
+    function registerPool(pool: ComponentPool): void {
+        if (!pool.belongsTo(world)) throw new Error("Pool does not belong to this world");
+        if (pools.has(pool)) throw new Error("Pool already registered");
+        pools.add(pool);
     }
 
-    addSystem(system: System): void {
-        this._systems.push(system);
+    function addSystem(system: System): void {
+        systems.push(system);
     }
 
-    step(dt: number): void {
-        if (this._stepping) {
+    function step(dt: number): void {
+        if (stepping) {
             throw new Error("Cannot call step() during step()");
         }
-        this._stepping = true;
+        stepping = true;
         try {
-            for (const system of this._systems) {
-                system(this, dt);
+            for (const system of systems) {
+                system(world, dt);
             }
         } catch (e) {
-            this.commandBuffer.clear();
+            world.commandBuffer.clear();
             throw e;
         } finally {
-            this._stepping = false;
+            stepping = false;
         }
 
-        this.commandBuffer.flush();
+        world.commandBuffer.flush();
     }
 
-    createTransformPropagationSystem(): System {
-        const s: FlatTreeStorage = this._storage;
-        return (_world: FlatWorld, dt: number): void => {
+    function createTransformPropagationSystem(): System {
+        const s = storage;
+        return (_world: FlatWorld, _dt: number): void => {
             const stack: number[] = [ROOT_ID];
             while (stack.length > 0) {
                 const nodeId: number = stack.pop()!;
@@ -285,82 +305,77 @@ export class FlatWorld {
                 }
 
                 const parentId: number = s.parent[nodeId];
-                let pa: number = 1; // pa stands for parent [world] a, etc.
+                let pa: number = 1;
                 let pb: number = 0;
                 let px: number = 0;
                 let py: number = 0;
                 if (parentId !== NULL) {
-                    // parent world transforms
                     pa = s.worldA[parentId];
                     pb = s.worldB[parentId];
                     px = s.worldTx[parentId];
                     py = s.worldTy[parentId];
                 }
 
-                let la: number = s.localA[nodeId]; // la stands for [child] local a, etc
-                let lb: number = s.localB[nodeId];
-                let lx: number = s.localTx[nodeId];
-                let ly: number = s.localTy[nodeId];
+                const la: number = s.localA[nodeId];
+                const lb: number = s.localB[nodeId];
+                const lx: number = s.localTx[nodeId];
+                const ly: number = s.localTy[nodeId];
 
                 s.worldA[nodeId] = pa * la - pb * lb;
                 s.worldB[nodeId] = pb * la + pa * lb;
                 s.worldTx[nodeId] = lx * pa - ly * pb + px;
                 s.worldTy[nodeId] = lx * pb + ly * pa + py;
 
-                // add children (it's gonna do them in reverse order)
                 let child: number = s.firstChild[nodeId];
                 while (child !== NULL) {
                     stack.push(child);
                     child = s.nextSibling[child];
                 }
             }
-        }
+        };
     }
 
-    setLocalTransform(ref: NodeHandle, a: number, b: number, tx: number, ty: number): void {
-        this.assertValidRef(ref);
+    function setLocalTransform(ref: NodeHandle, a: number, b: number, tx: number, ty: number): void {
+        assertValidRef(ref);
 
-        this._storage.localA[ref.id] = a;
-        this._storage.localB[ref.id] = b;
-        this._storage.localTx[ref.id] = tx;
-        this._storage.localTy[ref.id] = ty;
+        storage.localA[ref.id] = a;
+        storage.localB[ref.id] = b;
+        storage.localTx[ref.id] = tx;
+        storage.localTy[ref.id] = ty;
     }
 
-    getLocalTransform(ref: NodeHandle): {a: number, b: number, tx: number, ty: number} {
-        this.assertValidRef(ref);
+    function getLocalTransform(ref: NodeHandle): { a: number; b: number; tx: number; ty: number } {
+        assertValidRef(ref);
 
         return {
-            a: this._storage.localA[ref.id],
-            b: this._storage.localB[ref.id],
-            tx: this._storage.localTx[ref.id],
-            ty: this._storage.localTy[ref.id],
-        }
+            a: storage.localA[ref.id],
+            b: storage.localB[ref.id],
+            tx: storage.localTx[ref.id],
+            ty: storage.localTy[ref.id],
+        };
     }
 
-    setLocalPosition(ref: NodeHandle, tx: number, ty: number): void {
-        this.assertValidRef(ref);
+    function setLocalPosition(ref: NodeHandle, tx: number, ty: number): void {
+        assertValidRef(ref);
 
-        this._storage.localTx[ref.id] = tx;
-        this._storage.localTy[ref.id] = ty;
+        storage.localTx[ref.id] = tx;
+        storage.localTy[ref.id] = ty;
     }
 
-    getWorldTransform(ref: NodeHandle): {a: number, b: number, tx: number, ty: number} {
-        this.assertValidRef(ref);
+    function getWorldTransform(ref: NodeHandle): { a: number; b: number; tx: number; ty: number } {
+        assertValidRef(ref);
 
         return {
-            a: this._storage.worldA[ref.id],
-            b: this._storage.worldB[ref.id],
-            tx: this._storage.worldTx[ref.id],
-            ty: this._storage.worldTy[ref.id],
-        }
+            a: storage.worldA[ref.id],
+            b: storage.worldB[ref.id],
+            tx: storage.worldTx[ref.id],
+            ty: storage.worldTy[ref.id],
+        };
     }
 
-    /**
-     * @internal
-     *
-     * for testing purposes
-     */
-    getStorage(): FlatTreeStorage {
-        return this._storage;
+    function getStorage(): FlatTreeStorage {
+        return storage;
     }
+
+    return world;
 }

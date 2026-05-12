@@ -1,11 +1,11 @@
-import {FlatWorld} from "../FlatWorld";
-import {NodeHandle, refEquals} from "../types";
+import {createFlatWorld} from "../FlatWorld";
+import {NodeHandle, refEquals, FlatWorld} from "../types";
 
 describe('destroy', () => {
     describe('happy paths', () => {
 
         it('removes node from parent children list', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const root: NodeHandle = world.root;
             const child: NodeHandle = world.createNode();
 
@@ -17,7 +17,7 @@ describe('destroy', () => {
         })
 
         it('isAlive() returns false for destroyed nodes', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const node: NodeHandle = world.createNode();
 
             expect(world.isAlive(node)).toBe(true);
@@ -26,7 +26,7 @@ describe('destroy', () => {
         })
 
         it('can reallocate freed slot (world.createNode uses most recently destroyed spot)', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const node1: NodeHandle = world.createNode();
 
             world.destroy(node1);
@@ -37,7 +37,7 @@ describe('destroy', () => {
         })
 
         it('destroys all children recursively (works for deep subtree 3+ levels)', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const root: NodeHandle = world.root;
             const node1: NodeHandle = world.createNode();
             const node2: NodeHandle = world.createNode();
@@ -69,7 +69,7 @@ describe('destroy', () => {
         })
 
         it('can reuse all destroyed descendants', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const root: NodeHandle = world.root;
             const node1: NodeHandle = world.createNode();
             const node2: NodeHandle = world.createNode();
@@ -100,7 +100,7 @@ describe('destroy', () => {
         })
 
         it('destroy updates first child correctly', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const node1: NodeHandle = world.createNode();
             const node2: NodeHandle = world.createNode();
             const node3: NodeHandle = world.createNode();
@@ -116,7 +116,7 @@ describe('destroy', () => {
         })
 
         it('destroy updates middle child correctly', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const node1: NodeHandle = world.createNode();
             const node2: NodeHandle = world.createNode();
             const node3: NodeHandle = world.createNode();
@@ -132,7 +132,7 @@ describe('destroy', () => {
         })
 
         it('destroy updates last child correctly', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const node1: NodeHandle = world.createNode();
             const node2: NodeHandle = world.createNode();
             const node3: NodeHandle = world.createNode();
@@ -150,13 +150,13 @@ describe('destroy', () => {
 
     describe('Error cases', () => {
         it('cannot destroy root', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
 
             expect(() => world.destroy(world.root)).toThrow("Cannot destroy root node");
         })
 
         it('cannot destroy stale references', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const node1: NodeHandle = world.createNode();
             world.destroy(node1);
             const node2: NodeHandle = world.createNode();
@@ -171,7 +171,7 @@ describe('destroy', () => {
 describe('reparent', () => {
     describe('happy paths', () => {
         it('moves node from old parent to new parent', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const node1: NodeHandle = world.createNode();
             const node2: NodeHandle = world.createNode();
 
@@ -184,7 +184,7 @@ describe('reparent', () => {
         })
 
         it('old parent no longer has child node and new parent does', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const node1: NodeHandle = world.createNode();
             const node2: NodeHandle = world.createNode();
             const node3: NodeHandle = world.createNode();
@@ -203,7 +203,7 @@ describe('reparent', () => {
         })
 
         it('preserves children after reparent', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const node1: NodeHandle = world.createNode();
             const node2: NodeHandle = world.createNode();
             const node3: NodeHandle = world.createNode();
@@ -222,7 +222,7 @@ describe('reparent', () => {
         })
 
         it('preserves all descendants with deep subtree', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const node1: NodeHandle = world.createNode();
             const node2: NodeHandle = world.createNode();
             const node3: NodeHandle = world.createNode();
@@ -241,7 +241,7 @@ describe('reparent', () => {
         })
 
         it('first child — old parent firstChild updates', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const parent: NodeHandle = world.createNode();
             const node1: NodeHandle = world.createNode();
             const node2: NodeHandle = world.createNode();
@@ -259,7 +259,7 @@ describe('reparent', () => {
         })
 
         it('middle child — old parent siblings relink', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const parent: NodeHandle = world.createNode();
             const node1: NodeHandle = world.createNode();
             const node2: NodeHandle = world.createNode();
@@ -277,7 +277,7 @@ describe('reparent', () => {
         })
 
         it('last child — old parent list terminates', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const parent: NodeHandle = world.createNode();
             const node1: NodeHandle = world.createNode();
             const node2: NodeHandle = world.createNode();
@@ -295,7 +295,7 @@ describe('reparent', () => {
         })
 
         it('makes reparented node head of new parent child list and shifts down previous children', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const parent: NodeHandle = world.createNode();
             const node1: NodeHandle = world.createNode();
             const node2: NodeHandle = world.createNode();
@@ -313,7 +313,7 @@ describe('reparent', () => {
 
     describe('error cases', () => {
         it('cannot reparent root', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const node1: NodeHandle = world.createNode();
             world.attach(node1, world.root);
 
@@ -321,33 +321,33 @@ describe('reparent', () => {
         })
 
         it('cannot reparent stale node ref', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const node1: NodeHandle = world.createNode();
             const node2: NodeHandle = world.createNode();
 
             world.attach(node1, world.root);
             world.attach(node2, world.root);
             world.destroy(node2);
-            world.createNode(); // so node2's id is alive
+            world.createNode();
 
             expect(() => world.reparent(node2, node1)).toThrow("Stale node reference");
         })
 
         it('cannot reparent stale parent ref', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const node1: NodeHandle = world.createNode();
             const node2: NodeHandle = world.createNode();
 
             world.attach(node1, world.root);
             world.attach(node2, world.root);
             world.destroy(node1);
-            world.createNode(); // so node1's id is alive
+            world.createNode();
 
             expect(() => world.reparent(node2, node1)).toThrow("Stale node reference");
         })
 
         it('cannot reparent a node to itself', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const node: NodeHandle = world.createNode();
 
             world.attach(node, world.root);
@@ -356,14 +356,14 @@ describe('reparent', () => {
         })
 
         it('cannot reparent parentless node', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const node: NodeHandle = world.createNode();
 
             expect(() => world.reparent(node, world.root)).toThrow("Node does not have a parent, use attach instead");
         })
 
         it('cannot reparent to own child', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const node1: NodeHandle = world.createNode();
             const node2: NodeHandle = world.createNode();
 
@@ -374,7 +374,7 @@ describe('reparent', () => {
         })
 
         it('cannot reparent to own grandchild', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const node1: NodeHandle = world.createNode();
             const node2: NodeHandle = world.createNode();
             const node3: NodeHandle = world.createNode();
@@ -387,7 +387,7 @@ describe('reparent', () => {
         })
 
         it('cannot reparent to own to deep descendant', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const node1: NodeHandle = world.createNode();
             const node2: NodeHandle = world.createNode();
             const node3: NodeHandle = world.createNode();
@@ -402,7 +402,7 @@ describe('reparent', () => {
         })
 
         it('cannot reparent to own parent', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const node1: NodeHandle = world.createNode();
 
             world.attach(node1, world.root);
@@ -413,7 +413,7 @@ describe('reparent', () => {
 
     describe('edge cases', () => {
         it('doesnt change enabled status', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const node1: NodeHandle = world.createNode();
             const node2: NodeHandle = world.createNode();
 
@@ -426,7 +426,7 @@ describe('reparent', () => {
         })
 
         it('doesnt change node version', () => {
-            const world: FlatWorld = new FlatWorld(10);
+            const world: FlatWorld = createFlatWorld(10);
             const node1: NodeHandle = world.createNode();
             const node2: NodeHandle = world.createNode();
 

@@ -1,44 +1,35 @@
-import {ComponentPool} from "../ComponentPool";
-import {FlatWorld} from "../FlatWorld";
-import {NodeHandle, System, refEquals} from "../types";
+import {createComponentPool} from "../ComponentPool";
+import {createFlatWorld} from "../FlatWorld";
+import {NodeHandle, System, refEquals, FlatWorld, ComponentPool} from "../types";
 import {NULL} from "../constants";
 
 describe('movement proof (not official movement system, just example one)', () => {
-    class PositionPool extends ComponentPool {
-        x: Float32Array;
-        y: Float32Array;
-
-        constructor(world: FlatWorld, capacity: number) {
-            super(world, capacity);
-            this.x = new Float32Array(capacity);
-            this.y = new Float32Array(capacity);
-        }
-
-        protected swapComponentData(indexA: number, indexB: number): void {
+    function createPositionPool(world: FlatWorld, capacity: number) {
+        const x = new Float32Array(capacity);
+        const y = new Float32Array(capacity);
+        const pool = createComponentPool(world, capacity, (a: number, b: number) => {
             let tmp: number;
-            tmp = this.x[indexA]; this.x[indexA] = this.x[indexB]; this.x[indexB] = tmp;
-            tmp = this.y[indexA]; this.y[indexA] = this.y[indexB]; this.y[indexB] = tmp;
-        }
+            tmp = x[a]; x[a] = x[b]; x[b] = tmp;
+            tmp = y[a]; y[a] = y[b]; y[b] = tmp;
+        });
+        return { pool, x, y };
     }
 
-    class VelocityPool extends ComponentPool {
-        vx: Float32Array;
-        vy: Float32Array;
-
-        constructor(world: FlatWorld, capacity: number) {
-            super(world, capacity);
-            this.vx = new Float32Array(capacity);
-            this.vy = new Float32Array(capacity);
-        }
-
-        protected swapComponentData(indexA: number, indexB: number): void {
+    function createVelocityPool(world: FlatWorld, capacity: number) {
+        const vx = new Float32Array(capacity);
+        const vy = new Float32Array(capacity);
+        const pool = createComponentPool(world, capacity, (a: number, b: number) => {
             let tmp: number;
-            tmp = this.vx[indexA]; this.vx[indexA] = this.vx[indexB]; this.vx[indexB] = tmp;
-            tmp = this.vy[indexA]; this.vy[indexA] = this.vy[indexB]; this.vy[indexB] = tmp;
-        }
+            tmp = vx[a]; vx[a] = vx[b]; vx[b] = tmp;
+            tmp = vy[a]; vy[a] = vy[b]; vy[b] = tmp;
+        });
+        return { pool, vx, vy };
     }
 
-    function createMovementSystem(posPool: PositionPool, velPool: VelocityPool): System {
+    function createMovementSystem(
+        posPool: ComponentPool, posX: Float32Array, posY: Float32Array,
+        velPool: ComponentPool, velVx: Float32Array, velVy: Float32Array,
+    ): System {
         return (_world: FlatWorld, dt: number) => {
             for (let i: number = 0; i < velPool.count; i++) {
                 const nodeId: number = velPool.nodeIdAt(i);
@@ -46,96 +37,96 @@ describe('movement proof (not official movement system, just example one)', () =
 
                 if (posIdx === NULL) continue;
 
-                posPool.x[posIdx] += velPool.vx[i] * dt;
-                posPool.y[posIdx] += velPool.vy[i] * dt;
+                posX[posIdx] += velVx[i] * dt;
+                posY[posIdx] += velVy[i] * dt;
             }
         }
     }
 
     it('node with position(0,0) and velocity(10,5), after step(1.0): position is (10, 5)', () => {
-        const world: FlatWorld = new FlatWorld(10);
-        const velPool: VelocityPool = new VelocityPool(world, 5);
-        const posPool: PositionPool = new PositionPool(world, 5);
+        const world: FlatWorld = createFlatWorld(10);
+        const { pool: velPool, vx, vy } = createVelocityPool(world, 5);
+        const { pool: posPool, x: posX, y: posY } = createPositionPool(world, 5);
         world.registerPool(velPool);
         world.registerPool(posPool);
         const node: NodeHandle = world.createNode();
         velPool.add(node);
         posPool.add(node);
-        velPool.vx[velPool.get(node)] = 10;
-        velPool.vy[velPool.get(node)] = 5;
-        posPool.x[posPool.get(node)] = 0;
-        posPool.y[posPool.get(node)] = 0;
-        const movementSystem: System = createMovementSystem(posPool, velPool);
+        vx[velPool.get(node)] = 10;
+        vy[velPool.get(node)] = 5;
+        posX[posPool.get(node)] = 0;
+        posY[posPool.get(node)] = 0;
+        const movementSystem: System = createMovementSystem(posPool, posX, posY, velPool, vx, vy);
         world.addSystem(movementSystem);
 
         world.step(1.0);
 
-        expect(posPool.x[posPool.get(node)]).toBe(10);
-        expect(posPool.y[posPool.get(node)]).toBe(5);
+        expect(posX[posPool.get(node)]).toBe(10);
+        expect(posY[posPool.get(node)]).toBe(5);
     })
 
     it('node with position(0,0) and velocity(10,5), after two steps of 0.5: position is (10, 5)', () => {
-        const world: FlatWorld = new FlatWorld(10);
-        const velPool: VelocityPool = new VelocityPool(world, 5);
-        const posPool: PositionPool = new PositionPool(world, 5);
+        const world: FlatWorld = createFlatWorld(10);
+        const { pool: velPool, vx, vy } = createVelocityPool(world, 5);
+        const { pool: posPool, x: posX, y: posY } = createPositionPool(world, 5);
         world.registerPool(velPool);
         world.registerPool(posPool);
         const node: NodeHandle = world.createNode();
         velPool.add(node);
         posPool.add(node);
-        velPool.vx[velPool.get(node)] = 10;
-        velPool.vy[velPool.get(node)] = 5;
-        posPool.x[posPool.get(node)] = 0;
-        posPool.y[posPool.get(node)] = 0;
-        const movementSystem: System = createMovementSystem(posPool, velPool);
+        vx[velPool.get(node)] = 10;
+        vy[velPool.get(node)] = 5;
+        posX[posPool.get(node)] = 0;
+        posY[posPool.get(node)] = 0;
+        const movementSystem: System = createMovementSystem(posPool, posX, posY, velPool, vx, vy);
         world.addSystem(movementSystem);
 
         world.step(0.5);
         world.step(0.5);
 
-        expect(posPool.x[posPool.get(node)]).toBe(10);
-        expect(posPool.y[posPool.get(node)]).toBe(5);
+        expect(posX[posPool.get(node)]).toBe(10);
+        expect(posY[posPool.get(node)]).toBe(5);
     })
 
     it('node with position but no velocity - unaffected by movement system', () => {
-        const world: FlatWorld = new FlatWorld(10);
-        const velPool: VelocityPool = new VelocityPool(world, 5);
-        const posPool: PositionPool = new PositionPool(world, 5);
+        const world: FlatWorld = createFlatWorld(10);
+        const { pool: velPool, vx, vy } = createVelocityPool(world, 5);
+        const { pool: posPool, x: posX, y: posY } = createPositionPool(world, 5);
         world.registerPool(velPool);
         world.registerPool(posPool);
         const node: NodeHandle = world.createNode();
         posPool.add(node);
-        posPool.x[posPool.get(node)] = 0;
-        posPool.y[posPool.get(node)] = 0;
-        const movementSystem: System = createMovementSystem(posPool, velPool);
+        posX[posPool.get(node)] = 0;
+        posY[posPool.get(node)] = 0;
+        const movementSystem: System = createMovementSystem(posPool, posX, posY, velPool, vx, vy);
         world.addSystem(movementSystem);
 
         world.step(1);
 
-        expect(posPool.x[posPool.get(node)]).toBe(0);
-        expect(posPool.y[posPool.get(node)]).toBe(0);
+        expect(posX[posPool.get(node)]).toBe(0);
+        expect(posY[posPool.get(node)]).toBe(0);
     })
 
     it('node with velocity but no position — skipped by movement system (no crash)', () => {
-        const world: FlatWorld = new FlatWorld(10);
-        const velPool: VelocityPool = new VelocityPool(world, 5);
-        const posPool: PositionPool = new PositionPool(world, 5);
+        const world: FlatWorld = createFlatWorld(10);
+        const { pool: velPool, vx, vy } = createVelocityPool(world, 5);
+        const { pool: posPool, x: posX, y: posY } = createPositionPool(world, 5);
         world.registerPool(velPool);
         world.registerPool(posPool);
         const node: NodeHandle = world.createNode();
         velPool.add(node);
-        velPool.vx[velPool.get(node)] = 10;
-        velPool.vy[velPool.get(node)] = 5;
-        const movementSystem: System = createMovementSystem(posPool, velPool);
+        vx[velPool.get(node)] = 10;
+        vy[velPool.get(node)] = 5;
+        const movementSystem: System = createMovementSystem(posPool, posX, posY, velPool, vx, vy);
         world.addSystem(movementSystem);
 
         expect(() => world.step(1.0)).not.toThrow();
     })
 
     it('multiple nodes with update correctly', () => {
-        const world: FlatWorld = new FlatWorld(10);
-        const velPool: VelocityPool = new VelocityPool(world, 5);
-        const posPool: PositionPool = new PositionPool(world, 5);
+        const world: FlatWorld = createFlatWorld(10);
+        const { pool: velPool, vx, vy } = createVelocityPool(world, 5);
+        const { pool: posPool, x: posX, y: posY } = createPositionPool(world, 5);
         world.registerPool(velPool);
         world.registerPool(posPool);
         const node1: NodeHandle = world.createNode();
@@ -144,42 +135,42 @@ describe('movement proof (not official movement system, just example one)', () =
         posPool.add(node1);
         velPool.add(node2);
         posPool.add(node2);
-        velPool.vx[velPool.get(node1)] = 10;
-        velPool.vy[velPool.get(node1)] = 5;
-        posPool.x[posPool.get(node1)] = 0;
-        posPool.y[posPool.get(node1)] = 0;
-        velPool.vx[velPool.get(node2)] = -5;
-        velPool.vy[velPool.get(node2)] = 12;
-        posPool.x[posPool.get(node2)] = 0;
-        posPool.y[posPool.get(node2)] = 0;
-        const movementSystem: System = createMovementSystem(posPool, velPool);
+        vx[velPool.get(node1)] = 10;
+        vy[velPool.get(node1)] = 5;
+        posX[posPool.get(node1)] = 0;
+        posY[posPool.get(node1)] = 0;
+        vx[velPool.get(node2)] = -5;
+        vy[velPool.get(node2)] = 12;
+        posX[posPool.get(node2)] = 0;
+        posY[posPool.get(node2)] = 0;
+        const movementSystem: System = createMovementSystem(posPool, posX, posY, velPool, vx, vy);
         world.addSystem(movementSystem);
 
         world.step(1.0);
 
-        expect(posPool.x[posPool.get(node1)]).toBe(10);
-        expect(posPool.y[posPool.get(node1)]).toBe(5);
-        expect(posPool.x[posPool.get(node2)]).toBe(-5);
-        expect(posPool.y[posPool.get(node2)]).toBe(12);
+        expect(posX[posPool.get(node1)]).toBe(10);
+        expect(posY[posPool.get(node1)]).toBe(5);
+        expect(posX[posPool.get(node2)]).toBe(-5);
+        expect(posY[posPool.get(node2)]).toBe(12);
     })
 
     it('movement + destroy', () => {
-        const world: FlatWorld = new FlatWorld(10);
-        const velPool: VelocityPool = new VelocityPool(world, 5);
-        const posPool: PositionPool = new PositionPool(world, 5);
+        const world: FlatWorld = createFlatWorld(10);
+        const { pool: velPool, vx, vy } = createVelocityPool(world, 5);
+        const { pool: posPool, x: posX, y: posY } = createPositionPool(world, 5);
         world.registerPool(velPool);
         world.registerPool(posPool);
         const node: NodeHandle = world.createNode();
         velPool.add(node);
         posPool.add(node);
-        velPool.vx[velPool.get(node)] = 10;
-        velPool.vy[velPool.get(node)] = 5;
-        posPool.x[posPool.get(node)] = 0;
-        posPool.y[posPool.get(node)] = 0;
-        const movementSystem: System = createMovementSystem(posPool, velPool);
+        vx[velPool.get(node)] = 10;
+        vy[velPool.get(node)] = 5;
+        posX[posPool.get(node)] = 0;
+        posY[posPool.get(node)] = 0;
+        const movementSystem: System = createMovementSystem(posPool, posX, posY, velPool, vx, vy);
         const destroySystem: System = (world: FlatWorld, dt: number) => {
             for (let i = 0; i < posPool.count; i++) {
-                if (posPool.x[i] >= 10 && posPool.y[i] >= 5) {
+                if (posX[i] >= 10 && posY[i] >= 5) {
                     world.commandBuffer.destroy(posPool.getNodeHandle(i));
                 }
             }
@@ -200,45 +191,39 @@ describe('movement proof (not official movement system, just example one)', () =
 })
 
 describe('transform end-to-end', () => {
-    class VelocityPool extends ComponentPool {
-        vx: Float32Array;
-        vy: Float32Array;
-
-        constructor(world: FlatWorld, capacity: number) {
-            super(world, capacity);
-            this.vx = new Float32Array(capacity);
-            this.vy = new Float32Array(capacity);
-        }
-
-        protected swapComponentData(indexA: number, indexB: number): void {
+    function createVelocityPool(world: FlatWorld, capacity: number) {
+        const vx = new Float32Array(capacity);
+        const vy = new Float32Array(capacity);
+        const pool = createComponentPool(world, capacity, (a: number, b: number) => {
             let tmp: number;
-            tmp = this.vx[indexA]; this.vx[indexA] = this.vx[indexB]; this.vx[indexB] = tmp;
-            tmp = this.vy[indexA]; this.vy[indexA] = this.vy[indexB]; this.vy[indexB] = tmp;
-        }
+            tmp = vx[a]; vx[a] = vx[b]; vx[b] = tmp;
+            tmp = vy[a]; vy[a] = vy[b]; vy[b] = tmp;
+        });
+        return { pool, vx, vy };
     }
 
-    function createMovementSystem(velPool: VelocityPool): System {
+    function createMovementSystem(velPool: ComponentPool, vx: Float32Array, vy: Float32Array): System {
         return (_world: FlatWorld, dt: number) => {
             for (let i: number = 0; i < velPool.count; i++) {
                 const node: NodeHandle = velPool.getNodeHandle(i);
 
                 const currentTransform: { a: number, b: number, tx: number, ty: number } = _world.getLocalTransform(node);
-                _world.setLocalPosition(node, currentTransform.tx + velPool.vx[i] * dt, currentTransform.ty + velPool.vy[i] * dt);
+                _world.setLocalPosition(node, currentTransform.tx + vx[i] * dt, currentTransform.ty + vy[i] * dt);
             }
         }
     }
 
     it('Movement system + transform propagation', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const parent: NodeHandle = world.root;
         const child: NodeHandle = world.createNode();
         world.attach(child, parent);
-        const velPool: VelocityPool = new VelocityPool(world, 5);
+        const { pool: velPool, vx, vy } = createVelocityPool(world, 5);
         world.registerPool(velPool);
         velPool.add(parent);
-        velPool.vx[velPool.get(parent)] = 1;
-        velPool.vy[velPool.get(parent)] = 2;
-        const movementSystem: System = createMovementSystem(velPool);
+        vx[velPool.get(parent)] = 1;
+        vy[velPool.get(parent)] = 2;
+        const movementSystem: System = createMovementSystem(velPool, vx, vy);
         const propagationSystem: System = world.createTransformPropagationSystem();
         world.addSystem(movementSystem);
         world.addSystem(propagationSystem);
@@ -260,16 +245,16 @@ describe('transform end-to-end', () => {
     })
 
     it('Movement + propagation + deferred destroy', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const parent: NodeHandle = world.root;
         const child: NodeHandle = world.createNode();
         world.attach(child, parent);
-        const velPool: VelocityPool = new VelocityPool(world, 5);
+        const { pool: velPool, vx, vy } = createVelocityPool(world, 5);
         world.registerPool(velPool);
         velPool.add(parent);
-        velPool.vx[velPool.get(parent)] = 1;
-        velPool.vy[velPool.get(parent)] = 2;
-        const movementSystem: System = createMovementSystem(velPool);
+        vx[velPool.get(parent)] = 1;
+        vy[velPool.get(parent)] = 2;
+        const movementSystem: System = createMovementSystem(velPool, vx, vy);
         const propagationSystem: System = world.createTransformPropagationSystem();
         const destroyChild: System = (_world: FlatWorld, _: number) => {
             if (_world.isAlive(child)) {
@@ -293,22 +278,22 @@ describe('transform end-to-end', () => {
     })
 
     it('Reparent during step + propagation on next step', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const parentA: NodeHandle = world.createNode();
         const parentB: NodeHandle = world.createNode();
         const child: NodeHandle = world.createNode();
         world.attach(parentA, world.root);
         world.attach(parentB, world.root);
         world.attach(child, parentA)
-        const velPool: VelocityPool = new VelocityPool(world, 5);
+        const { pool: velPool, vx, vy } = createVelocityPool(world, 5);
         world.registerPool(velPool);
         velPool.add(parentA);
         velPool.add(parentB);
-        velPool.vx[velPool.get(parentA)] = 1;
-        velPool.vy[velPool.get(parentA)] = 1;
-        velPool.vx[velPool.get(parentB)] = 2;
-        velPool.vy[velPool.get(parentB)] = 2;
-        const movementSystem: System = createMovementSystem(velPool);
+        vx[velPool.get(parentA)] = 1;
+        vy[velPool.get(parentA)] = 1;
+        vx[velPool.get(parentB)] = 2;
+        vy[velPool.get(parentB)] = 2;
+        const movementSystem: System = createMovementSystem(velPool, vx, vy);
         const propagationSystem: System = world.createTransformPropagationSystem();
         const reparentChild: System = (_world: FlatWorld, _: number) => {
             const parentHandle = _world.getParent(child);
@@ -335,15 +320,15 @@ describe('transform end-to-end', () => {
     })
 
     it('Disabled node re-enabled → next step propagates correctly', () => {
-        const world: FlatWorld = new FlatWorld(10);
+        const world: FlatWorld = createFlatWorld(10);
         const node: NodeHandle = world.createNode();
         world.attach(node, world.root);
-        const velPool: VelocityPool = new VelocityPool(world, 5);
+        const { pool: velPool, vx, vy } = createVelocityPool(world, 5);
         world.registerPool(velPool);
         velPool.add(node);
-        velPool.vx[velPool.get(node)] = 1;
-        velPool.vy[velPool.get(node)] = 1;
-        const movementSystem: System = createMovementSystem(velPool);
+        vx[velPool.get(node)] = 1;
+        vy[velPool.get(node)] = 1;
+        const movementSystem: System = createMovementSystem(velPool, vx, vy);
         const propagationSystem: System = world.createTransformPropagationSystem();
         world.addSystem(movementSystem);
         world.addSystem(propagationSystem);
