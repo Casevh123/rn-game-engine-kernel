@@ -2,7 +2,7 @@
 
 > The abstract model for a data-oriented game engine kernel. Tests are the executable spec. This document captures what tests cannot: the model, the invariants, and why decisions were made.
 >
-> This spec describes the kernel that runs on a dedicated worklet thread via `createWorkletRuntime`. The invariants defined here are runtime-agnostic — they hold in tests, in a worklet, or in any future backend. Cross-thread boundaries (kernel ↔ renderer, kernel ↔ React) are documented in [`plan.md`](plan.md).
+> This spec describes the kernel that runs on a dedicated worklet thread via `createWorkletRuntime` (react-native-reanimated). The invariants defined here are runtime-agnostic — they hold in tests, in a worklet, or in any future backend. Cross-thread boundaries (kernel ↔ renderer, kernel ↔ React) are documented in [`plan.md`](plan.md).
 
 ---
 
@@ -14,11 +14,17 @@ An entity is an integer slot in a fixed-capacity memory pool. Slots are backed b
 
 - **Structural links** (`Int32Array`): parent, firstChild, nextSibling, prevSibling
 - **Lifecycle state** (`Int32Array`): alive, enabled, version
-- **Allocator state** (`Int32Array`): freeNext (free-list linkage)
+- **Allocator state** (`Int32Array`): freeNext (free-list linkage, closure-scoped)
 - **Local transform** (`Float32Array`): localA, localB, localTx, localTy
 - **World transform** (`Float32Array`): worldA, worldB, worldTx, worldTy
 
 Entities form a **rooted tree**. Slot 0 is the root — always alive, never freed. Remaining slots begin on a singly-linked free list. Allocation pops from the head; freeing pushes back (LIFO reuse with version bump).
+
+### References (NodeHandle)
+
+A `NodeHandle` is a plain `{ readonly id: number; readonly version: number }` tuple — a **generational handle**. The version prevents use-after-free: if a slot has been freed and reallocated, old references are rejected because their version no longer matches.
+
+Handles are world-agnostic value types. Equality is checked via `refEquals(a, b)` which compares both `id` and `version`. Handles carry no methods and no world reference — they are pure data.
 
 ### The Tree
 
@@ -33,7 +39,9 @@ Children are stored as a **doubly-linked sibling list** per parent. Structural m
 
 Components are **data, not behavior**. No `update()` methods. No lifecycle hooks.
 
-Each component type has a dedicated **ComponentPool** — a dense array where live components occupy indices `0..count-1`. Removal uses **swap-and-pop**: the last entry fills the gap, maintaining density without holes.
+Each component type has a dedicated **ComponentPool** created via `createComponentPool(world, capacity, swapFn)` — a dense array where live components occupy indices `0..count-1`. Removal uses **swap-and-pop**: the last entry fills the gap, maintaining density without holes.
+
+The `swapFn` callback is provided by the user to swap their own data arrays during removal. This replaces the former abstract class inheritance pattern — users own their TypedArrays directly, and the pool handles only index bookkeeping.
 
 Each pool maintains three mappings:
 
@@ -61,7 +69,7 @@ Composition is pure arithmetic — no trigonometry. Trig only appears when a sys
 
 World transforms are computed by a **transform propagation system** — an iterative pre-order tree walk that composes `WorldChild = WorldParent × LocalChild` top-down. Disabled nodes (enabled = 0) and their entire subtrees are skipped; their world transforms retain their last computed value.
 
-The propagation system is an **engine-level system** — created by `FlatWorld.createTransformPropagationSystem()`, which closes over private storage. The user registers it via `addSystem()`. (In a future user-facing API layer, it will become automatic.)
+The propagation system is an **engine-level system** — created by `world.createTransformPropagationSystem()`, which closes over private storage. The user registers it via `addSystem()`. (In a future user-facing API layer, it will become automatic.)
 
 **Write authority**: systems write to local transforms; propagation computes world transforms. `setWorldTransform` is intentionally absent from the public API.
 
@@ -79,33 +87,50 @@ Structural mutations (destroy, attach, detach, reparent) must not occur during s
 
 ### Frame Loop
 
-`World.step(dt)` is the frame:
+`world.step(dt)` is the frame:
 
 1. Run all registered systems in order, each receiving `(world, dt)`
 2. Flush the command buffer (execute all deferred mutations in FIFO order)
 
 Step is non-reentrant. If a system throws, the command buffer is **cleared** (partial-frame commands are unsafe to commit — they may have causal dependencies on commands that never ran). The stepping guard is cleared and the error is re-thrown so the world remains usable for subsequent frames.
 
-### References
-
-A reference is a `(world, id, version)` tuple — a **generational handle**. The version prevents use-after-free: if a slot has been freed and reallocated, old references are rejected because their version no longer matches. References are ephemeral facades created on the fly, not cached.
-
 ### World
 
-The world owns the memory pool, the pool registry, the system list, the command buffer, and all mutation authority. Every operation goes through the world. Every operation validates ownership and liveness before proceeding.
+The world owns the memory pool, the pool registry, the system list, the command buffer, and all mutation authority. Every operation goes through the world. Every operation validates liveness and version before proceeding.
+
+The world is created via `createFlatWorld(capacity)` — a closure-factory that returns a plain object implementing the `FlatWorld` interface. All private state (storage, pools, systems, stepping flag) is captured in closures. The returned object is a POJO with no prototype chain, making it fully serializable across worklet thread boundaries.
+
+---
+
+## Architecture: Closure-Factory Pattern
+
+The entire kernel uses **closure-factory functions** instead of classes. Every module exports a factory that returns a plain POJO conforming to an interface:
+
+| Factory | Returns | Captures |
+|---|---|---|
+| `createFlatTreeStorage(capacity)` | `FlatTreeStorage` | TypedArrays, freeHead, allocator state |
+| `createCommandBuffer(world)` | `CommandBuffer` | command queue, world reference |
+| `createComponentPool(world, cap, swapFn)` | `ComponentPool` | mapping arrays, count, world reference, user swap callback |
+| `createFlatWorld(capacity)` | `FlatWorld` | storage, pools set, systems list, stepping flag |
+
+**Why factories instead of classes:** The kernel runs on a worklet runtime (`createWorkletRuntime`). Worklet serialization strips prototype chains — class methods become undefined on the receiving thread. Closure-factory POJOs serialize cleanly because their "methods" are own properties (function references), not inherited from a prototype.
+
+This was proven empirically:
+- **A2 audit**: Classes fail — methods stripped during serialization
+- **A3 audit**: Factory POJOs pass — 18/18 checks on worklet runtime
 
 ---
 
 ## Axioms
 
 1. Root is slot 0. Always alive. Version = 1. Enabled = 1. Cannot be attached, detached, destroyed, or reparented.
-2. Every mutation validates: world ownership → liveness → version match. In that order.
+2. Every mutation validates: liveness → version match. In that order.
 3. No node may have two parents (attach rejects already-parented nodes).
 4. No cycles (reparent walks the parent chain to detect ancestry).
 5. Freed slots return to LIFO free list with version bump. Any old reference to that slot is permanently stale.
 6. One component per type per node.
 7. Registered pools are cleaned during destroy, before the slot is freed. Unregistered pools are the caller's responsibility.
-8. Storage arrays are private. No external code touches raw memory.
+8. Storage arrays are encapsulated within factory closures. No external code touches raw memory (except via `getStorage()` for engine-level systems and testing).
 9. Structural tree mutations are deferred during system execution. **Enforced at runtime** — direct calls to `destroy()`, `attach()`, `detach()`, `reparent()` throw during `step()`. Systems enqueue commands; the world flushes them after all systems run.
 10. Systems run sequentially in registration order. No parallelism guarantees.
 11. `step()` is non-reentrant. Calling `step()` during `step()` is an error.
@@ -121,7 +146,7 @@ The world owns the memory pool, the pool registry, the system list, the command 
 
 | Operation | Preconditions | Postconditions |
 |---|---|---|
-| `createNode()` | Free list non-empty | Slot popped, alive=1, enabled=1, version bumped, ref returned |
+| `createNode()` | Free list non-empty | Slot popped, alive=1, enabled=1, version bumped, NodeHandle returned |
 | `destroy(ref)` | Valid ref, not root | Subtree destroyed depth-first. For each node: pools cleaned, slot freed, version bumped |
 
 ### Tree Mutations
@@ -137,11 +162,11 @@ The world owns the memory pool, the pool registry, the system list, the command 
 | Operation | Preconditions | Postconditions |
 |---|---|---|
 | `add(ref)` | Valid ref, no existing component, pool not full | Component appended at `count`, both mappings set, count++ |
-| `remove(ref)` | Valid ref, has component | Swap-and-pop: last fills gap, moved entry's mappings updated, count-- |
+| `remove(ref)` | Valid ref, has component | Swap-and-pop: last fills gap, `swapFn` called, moved entry's mappings updated, count-- |
 | `has(ref)` | Valid ref | Returns boolean |
 | `get(ref)` | Valid ref, has component | Returns dense index |
 | `getByNodeId(nodeId)` | (none) | Returns dense index or NULL (-1). No validation — fast path for system iteration |
-| `getNode(index)` | 0 ≤ index < count | Returns FlatNodeRef for the entity at that dense index |
+| `getNodeHandle(index)` | 0 ≤ index < count | Returns NodeHandle for the entity at that dense index |
 | `nodeIdAt(i)` | 0 ≤ i < count | Returns owning node id |
 
 ### World-Pool Integration
@@ -166,10 +191,10 @@ The world owns the memory pool, the pool registry, the system list, the command 
 
 | Operation | Preconditions | Postconditions |
 |---|---|---|
-| `setLocalTransform(ref, a, b, tx, ty)` | Valid ref, in world | Local transform columns updated |
-| `getLocalTransform(ref)` | Valid ref, in world | Returns `{a, b, tx, ty}` |
-| `setLocalPosition(ref, tx, ty)` | Valid ref, in world | Only `localTx` and `localTy` updated; `localA` and `localB` unchanged |
-| `getWorldTransform(ref)` | Valid ref, in world | Returns `{a, b, tx, ty}` |
+| `setLocalTransform(ref, a, b, tx, ty)` | Valid ref | Local transform columns updated |
+| `getLocalTransform(ref)` | Valid ref | Returns `{a, b, tx, ty}` |
+| `setLocalPosition(ref, tx, ty)` | Valid ref | Only `localTx` and `localTy` updated; `localA` and `localB` unchanged |
+| `getWorldTransform(ref)` | Valid ref | Returns `{a, b, tx, ty}` |
 | `createTransformPropagationSystem()` | (none) | Returns a System that performs pre-order tree walk, composing world transforms from local transforms. Skips disabled subtrees |
 
 ### Frame Loop
@@ -183,6 +208,14 @@ The world owns the memory pool, the pool registry, the system list, the command 
 
 ## Design Decisions
 
+### Closure-Factory Architecture
+
+All kernel modules are closure-factory functions returning plain POJOs. No classes, no prototypes.
+
+**Why**: The kernel runs on a worklet thread via `createWorkletRuntime`. Worklet serialization transfers function bodies and closure captures across thread boundaries but strips prototype chains — class methods become `undefined`. Factory POJOs with methods as own properties survive serialization intact. Verified empirically: A2 (classes fail) → A3 (factories pass, 18/18).
+
+**Tradeoff**: No `instanceof` checks. Pool `belongsTo(world)` uses reference equality instead. Slightly more verbose factory signatures (e.g., `swapFn` callback replaces abstract method override).
+
 ### SoA Memory Layout
 
 All node data in parallel `Int32Array` columns indexed by slot ID.
@@ -193,11 +226,19 @@ All node data in parallel `Int32Array` columns indexed by slot ID.
 
 ### Generational Indices
 
-Every slot has a monotonically increasing version. References carry `(id, version)`. All operations reject version mismatches.
+Every slot has a monotonically increasing version. NodeHandle tuples carry `{id, version}`. All operations reject version mismatches.
 
 **Why**: In a slot-reuse architecture, a freed integer ID becomes a dangling pointer when that slot is reallocated. Generational indices prevent silent corruption. Borrowed from Rust ECS engines (Bevy, hecs, legion).
 
 **Tradeoff**: One integer comparison per operation. Negligible.
+
+### World-Agnostic Handles
+
+NodeHandle tuples carry no world reference — just `{id, version}`.
+
+**Why**: Handles that reference a world object create serialization dependencies and cross-world coupling. World-agnostic handles are pure data, freely copyable, and survive worklet serialization. Validation happens at the call site: `world.assertValidRef(handle)` checks liveness and version against the world's storage.
+
+**Tradeoff**: No compile-time guarantee that a handle belongs to the correct world. A handle from world A could be passed to world B. In practice this doesn't matter — games use a single world instance.
 
 ### Doubly-Linked Sibling Lists
 
@@ -207,13 +248,13 @@ Children stored via `firstChild`/`nextSibling`/`prevSibling`. O(1) head-insert o
 
 **Tradeoff**: Sibling traversal is pointer-chasing, not linear scan. Acceptable — hot iteration should go through component pools, not the tree.
 
-### Facade Pattern
+### Component Pool with Swap Callback
 
-Users interact with `FlatNodeRef` (an OOP-style handle). All calls delegate to `FlatWorld`, which owns private storage.
+`createComponentPool(world, capacity, swapFn)` takes a user-provided callback to swap data at two indices during removal.
 
-**Why**: DOD performance with OOP ergonomics. `node.enabled = false` routes to `storage.enabled[id] = 0`. Same pattern as Unity DOTS.
+**Why**: The pool manages index bookkeeping (node↔component mappings, count, swap-and-pop). The user owns their TypedArrays directly. The swap callback bridges the two concerns without inheritance. This pattern is more composable than abstract class inheritance and compatible with worklet serialization.
 
-**Tradeoff**: References are ephemeral. `getParent() === getParent()` is `false`. Use `.equals()` for logical equality.
+**Tradeoff**: User must ensure their swap callback correctly swaps ALL their data arrays. If they add a data column and forget to update the swap function, data corruption occurs silently.
 
 ### Dense Component Pools with Swap-and-Pop
 
@@ -222,12 +263,6 @@ Each component type gets a dedicated pool. Dense storage `0..count-1`. Removal s
 **Why**: O(1) removal. No holes in the dense region. Iteration is a tight linear loop. `nodeToComponent` gives O(1) lookup. `componentToNode` gives reverse mapping for iteration.
 
 **Tradeoff**: Component indices are unstable across removals. Never cache a component index across frames.
-
-### Abstract Base Class for Pools
-
-`ComponentPool` is abstract. Subclasses implement `swapComponentData()` for their typed arrays.
-
-**Why**: Bookkeeping (mappings, count, swap-and-pop) is invariant across all component types. Domain data (position, health, velocity) varies. One place for invariant enforcement, arbitrary data layouts per type.
 
 ### Pool Registry
 
@@ -263,11 +298,11 @@ Transforms are storage columns (like `enabled`), not component pools (like Posit
 
 ### Engine Systems vs User Systems
 
-Transform propagation is an **engine-level system** — tightly coupled to storage internals, created via `FlatWorld.createTransformPropagationSystem()`. User systems close over component pools and have no direct storage access.
+Transform propagation is an **engine-level system** — tightly coupled to storage internals, created via `world.createTransformPropagationSystem()`. User systems close over component pools and have no direct storage access.
 
-**Why**: The propagation system reads structural arrays (`parent`, `firstChild`, `nextSibling`, `enabled`) and writes to transform columns. Exposing storage would let user code corrupt tree invariants. The factory method on FlatWorld grants scoped access via closure without exposing storage publicly.
+**Why**: The propagation system reads structural arrays (`parent`, `firstChild`, `nextSibling`, `enabled`) and writes to transform columns. Exposing storage would let user code corrupt tree invariants. The factory method on the world grants scoped access via closure without exposing storage publicly.
 
-**Tradeoff**: Engine systems require a factory method on FlatWorld per system type. Acceptable — there are few engine systems (propagation, future render collection). User systems remain pure functions over pools.
+**Tradeoff**: Engine systems require a factory method on the world per system type. Acceptable — there are few engine systems (propagation, future render collection). User systems remain pure functions over pools.
 
 ### Deferred Structural Mutations
 

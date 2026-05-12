@@ -9,14 +9,15 @@
 
 - **Tree**: create, attach, detach, destroy (iterative post-order subtree), reparent (cycle detection)
 - **Storage**: SoA allocator, free-list, generational indices, doubly-linked siblings
-- **Components**: Dense pools, swap-and-pop, pool registry, automatic cleanup on destroy
-- **Facade**: FlatWorld + FlatNodeRef with ownership + liveness validation
-- **Execution model**: System type, CommandBuffer (deferred structural mutations), World.step(dt)
-- **Proof**: Movement system (PositionPool + VelocityPool + movementSystem) demonstrating end-to-end frame loop
-- **Transforms**: RSXform storage columns (4 floats per transform: sCosθ, sSinθ, tx, ty), local + world per node, transform propagation system (iterative pre-order tree walk), disabled subtree skipping, convenience accessors (setLocalTransform, getLocalTransform, setLocalPosition, getWorldTransform)
-- **Transform proof**: Movement system writes localTx/localTy → propagation computes world transforms → child tracks parent motion across frames. Reparent, destroy, and disable/re-enable all verified end-to-end.
-- **Tests**: ~196 tests across storage, world, destroy/reparent, component pools, command buffer, step, transforms, and integration
-- **Archived**: `state_tree` (original OOP prototype, served as behavioral reference, now superseded by flat_tree)
+- **Components**: Dense pools with swap callback, swap-and-pop, pool registry, automatic cleanup on destroy
+- **Architecture**: Closure-factory pattern — all modules are factory functions returning plain POJOs (no classes, no prototypes). Fully serializable across worklet thread boundaries
+- **Handles**: `NodeHandle` tuples `{id, version}` — world-agnostic, value-compared via `refEquals()`
+- **Execution model**: System type, CommandBuffer (deferred structural mutations), `world.step(dt)`
+- **Proof**: Movement system (velocity + position pools + movementSystem) demonstrating end-to-end frame loop
+- **Transforms**: RSXform storage columns (4 floats per transform: sCosθ, sSinθ, tx, ty), local + world per node, transform propagation system (iterative pre-order tree walk), disabled subtree skipping, convenience accessors
+- **Transform proof**: Movement system writes localTx/localTy → propagation computes world transforms → child tracks parent motion across frames. Reparent, destroy, and disable/re-enable all verified end-to-end
+- **Phase A (worklet compatibility)**: Complete. A1 (TypedArray primitives ✅), A2 (class serialization ❌ → motivated factory migration), A3 (full kernel on worklet runtime ✅ 18/18). Kernel instantiates, ticks, propagates transforms, and defers commands correctly on `createWorkletRuntime`
+- **Tests**: 182 tests across storage, world, destroy/reparent, component pools, command buffer, step, transforms, and integration
 - **Axiom 9 enforcement**: Runtime guards on `destroy()`, `attach()`, `detach()`, `reparent()` — throw during `step()`
 - **Crash recovery**: System throw clears command buffer (atomic frame semantics), world remains usable
 
@@ -24,17 +25,19 @@
 
 ## Runtime Target
 
-This TypeScript kernel IS the runtime — not a behavioral specification for a future C++ port. It runs on a dedicated background JS thread via `createWorkletRuntime` (react-native-worklets).
+This TypeScript kernel IS the runtime — not a behavioral specification for a future C++ port. It runs on a dedicated background JS thread via `createWorkletRuntime` (react-native-reanimated).
 
 | Concern | Thread | Technology |
 |---|---|---|
-| Game kernel (World.step, SoA pools, systems) | Background worklet thread | TypeScript, `createWorkletRuntime` |
+| Game kernel (world.step, SoA pools, systems) | Background worklet thread | TypeScript, `createWorkletRuntime` |
 | Rendering | UI thread (main thread) | react-native-skia `<Atlas>`, `useRSXformBuffer` |
 | Scene declaration & UI | JS thread | React, custom reconciler (v1.3+) |
 | Data transport (kernel → renderer) | Cross-thread | SharedValue (v0) → native buffer via Nitro (v1+) |
 | Input transport (UI → kernel) | Cross-thread | SharedValue snapshot, read per frame |
 
 **Authority model**: The kernel is the sole owner of simulation state. React is a projection — it sends commands but never owns entities, transforms, or components at runtime. The renderer is a consumer — it reads snapshots but never writes back.
+
+**Kernel packaging**: The kernel source is copied into the app repo. `'worklet'` directives are added at the integration boundary (not in this repo). The Reanimated Babel plugin processes directives in app source, not `node_modules` — so publishing as a compiled npm package would NOT enable worklet serialization. Source copying is the correct strategy for now.
 
 ---
 
@@ -45,8 +48,8 @@ This TypeScript kernel IS the runtime — not a behavioral specification for a f
 Kernel on a worklet thread. Sprites on screen. SharedValue bridge. React has no runtime authority — scene setup is hardcoded in the kernel initializer.
 
 **v0 proves:**
-- Kernel classes instantiate inside `createWorkletRuntime`
-- `World.step(dt)` ticks on a background thread at a stable rate
+- Kernel factories instantiate inside `createWorkletRuntime` ✅ (proven by A3)
+- `world.step(dt)` ticks on a background thread at a stable rate
 - Render snapshot crosses the thread boundary via SharedValue
 - `useRSXformBuffer` consumes the snapshot and `<Atlas>` draws sprites
 
@@ -55,10 +58,10 @@ Kernel on a worklet thread. Sprites on screen. SharedValue bridge. React has no 
 - Render collection system (engine system, runs after transform propagation)
 - Render buffer specification (output format of render collection)
 
-**Open problems (must answer at v0):**
-- Kernel bundling: how do kernel classes get into the worklet initializer?
-- Game loop driver: what timing primitives exist in `createWorkletRuntime`?
-- SharedValue throughput: how many entities before frame drops?
+**Resolved questions:**
+- ~~Kernel bundling: how do kernel classes get into the worklet initializer?~~ → Closure-factory POJOs with `'worklet'` directives. Babel plugin follows capture chain. Proven in A3
+- ~~Game loop driver: what timing primitives exist in `createWorkletRuntime`?~~ → `setInterval` and `setTimeout` confirmed available (A1). `performance.now()` available for timing
+- SharedValue throughput: how many entities before frame drops? → **Phase B will determine this**
 
 ---
 
@@ -154,7 +157,7 @@ These features can be designed, implemented, and tested in this repo with no Rea
 
 | Feature | What it is | Boundary-dependent? |
 |---|---|---|
-| SpritePool | ComponentPool subclass storing spriteType per entity | No |
+| SpritePool | `createComponentPool` + spriteType data array | No |
 | Render collection system | Engine system: iterates renderable pools + world transforms, writes render buffer | Output FORMAT is (will need validation at v0) |
 | Camera transform | Inverse RSXform composition: `screen = inv(camera) × entity` | No |
 | Z-index component | Storage column or pool for draw ordering | No |
@@ -177,4 +180,3 @@ Items marked "boundary-dependent" means the kernel-side logic is correct regardl
 | Entity handle mapping: names vs IDs vs UUIDs | React ↔ kernel command channel | Before v1.1 |
 | Particle path: full entities vs dedicated lightweight pool | Particle system, render collection | Before v2 |
 | Fixed vs variable timestep | Game loop driver | Before v0 |
-| Repo structure: standalone kernel package + separate RN app (monorepo) vs single repo | Project organization | Before v0 |
