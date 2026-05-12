@@ -8,11 +8,13 @@
 
 ### Entities (Nodes)
 
-An entity is an integer slot in a fixed-capacity memory pool. Slots are backed by parallel `Int32Array` columns (struct-of-arrays). Each slot carries:
+An entity is an integer slot in a fixed-capacity memory pool. Slots are backed by parallel typed array columns (struct-of-arrays). Each slot carries:
 
-- **Structural links**: parent, firstChild, nextSibling, prevSibling
-- **Lifecycle state**: alive, enabled, version
-- **Allocator state**: freeNext (free-list linkage)
+- **Structural links** (`Int32Array`): parent, firstChild, nextSibling, prevSibling
+- **Lifecycle state** (`Int32Array`): alive, enabled, version
+- **Allocator state** (`Int32Array`): freeNext (free-list linkage)
+- **Local transform** (`Float32Array`): localA, localB, localTx, localTy
+- **World transform** (`Float32Array`): worldA, worldB, worldTx, worldTy
 
 Entities form a **rooted tree**. Slot 0 is the root — always alive, never freed. Remaining slots begin on a singly-linked free list. Allocation pops from the head; freeing pushes back (LIFO reuse with version bump).
 
@@ -38,6 +40,28 @@ Each pool maintains three mappings:
 - `componentToVersion[compId]` → generation (stale entry detection)
 
 One component per type per node. Pools are registered with the world for automatic cleanup on destroy.
+
+### Transforms
+
+Every node has a **local transform** (relative to parent) and a **world transform** (relative to world origin). Both are storage columns, not components — transforms are fundamental to what a node is, not optional data.
+
+Transforms use **RSXform layout**: 4 floats per transform `(a, b, tx, ty)` where `a = scale * cos(θ)`, `b = scale * sin(θ)`. Identity is `(1, 0, 0, 0)`. This representation supports uniform scale + rotation + translation (no shear).
+
+**Composition** (`WorldChild = WorldParent × LocalChild`):
+```
+result.a  = p.a * c.a  - p.b * c.b
+result.b  = p.a * c.b  + p.b * c.a
+result.tx = p.a * c.tx - p.b * c.ty + p.tx
+result.ty = p.b * c.tx + p.a * c.ty + p.ty
+```
+
+Composition is pure arithmetic — no trigonometry. Trig only appears when a system explicitly sets a rotation angle (uncommon mutation, not a per-frame cost).
+
+World transforms are computed by a **transform propagation system** — an iterative pre-order tree walk that composes `WorldChild = WorldParent × LocalChild` top-down. Disabled nodes (enabled = 0) and their entire subtrees are skipped; their world transforms retain their last computed value.
+
+The propagation system is an **engine-level system** — created by `FlatWorld.createTransformPropagationSystem()`, which closes over private storage. The user registers it via `addSystem()`. (In a future user-facing API layer, it will become automatic.)
+
+**Write authority**: systems write to local transforms; propagation computes world transforms. `setWorldTransform` is intentionally absent from the public API.
 
 ### Systems
 
@@ -83,6 +107,9 @@ The world owns the memory pool, the pool registry, the system list, the command 
 9. Structural tree mutations are deferred during system execution. **Enforced at runtime** — direct calls to `destroy()`, `attach()`, `detach()`, `reparent()` throw during `step()`. Systems enqueue commands; the world flushes them after all systems run.
 10. Systems run sequentially in registration order. No parallelism guarantees.
 11. `step()` is non-reentrant. Calling `step()` during `step()` is an error.
+12. Every node has a local and world transform. Both reset to identity on allocate and free.
+13. World transforms are computed by propagation, never written directly by user code.
+14. Disabled nodes and their subtrees are skipped by transform propagation. Their world transforms retain their last computed value.
 
 ---
 
@@ -132,6 +159,16 @@ The world owns the memory pool, the pool registry, the system list, the command 
 | `reparent(node, parent)` | (none at enqueue) | Command queued. On flush: `world.reparent(node, parent)` |
 | `flush()` | (none) | All commands executed FIFO, queue cleared |
 | `clear()` | (none) | Queue discarded without execution |
+
+### Transform Accessors
+
+| Operation | Preconditions | Postconditions |
+|---|---|---|
+| `setLocalTransform(ref, a, b, tx, ty)` | Valid ref, in world | Local transform columns updated |
+| `getLocalTransform(ref)` | Valid ref, in world | Returns `{a, b, tx, ty}` |
+| `setLocalPosition(ref, tx, ty)` | Valid ref, in world | Only `localTx` and `localTy` updated; `localA` and `localB` unchanged |
+| `getWorldTransform(ref)` | Valid ref, in world | Returns `{a, b, tx, ty}` |
+| `createTransformPropagationSystem()` | (none) | Returns a System that performs pre-order tree walk, composing world transforms from local transforms. Skips disabled subtrees |
 
 ### Frame Loop
 
@@ -206,13 +243,37 @@ Systems are `(world: FlatWorld, dt: number) => void`. Not classes. Not interface
 
 **Tradeoff**: No built-in way to declare which pools a system reads/writes. Scheduling and access validation are the caller's responsibility. Sufficient for sequential single-threaded execution; would need extension for parallelism.
 
+### RSXform Transform Representation
+
+Transforms stored as 4 `Float32Array` columns per set: `a` (sCosθ), `b` (sSinθ), `tx`, `ty`. RSXform layout — uniform scale + rotation encoded as a single complex-number-like pair.
+
+**Why**: Three operations matter for transforms — composition (every node, every frame), position mutation (common), and extraction for rendering (every visible node, every frame). RSXform makes composition pure arithmetic (8 multiplies, 4 adds, no trig). Position mutation is a direct write to `tx`/`ty`. Extraction for the render packet (Skia `RSXform`) is zero-cost — the data is already in the target format.
+
+**Tradeoff**: Reading rotation angle or scale individually requires `atan2` or `sqrt`. Acceptable — these are uncommon queries, not per-frame costs. Non-uniform scale (sx ≠ sy) is not representable. Acceptable for 2D game engines — non-uniform scale introduces shear under composition anyway.
+
+### Storage Columns vs Component Pools for Transforms
+
+Transforms are storage columns (like `enabled`), not component pools (like Position or Velocity).
+
+**Why**: Every node needs a transform — it's part of what a node is, not optional data. A component pool's `nodeToComponent` mapping costs `O(capacity)` anyway, so there are no space savings. Storage columns give O(1) indexed access by nodeId with no indirection.
+
+**Tradeoff**: Nodes that don't need transforms (e.g., pure logical grouping nodes) still pay 8 floats. Negligible — 32 bytes per node.
+
+### Engine Systems vs User Systems
+
+Transform propagation is an **engine-level system** — tightly coupled to storage internals, created via `FlatWorld.createTransformPropagationSystem()`. User systems close over component pools and have no direct storage access.
+
+**Why**: The propagation system reads structural arrays (`parent`, `firstChild`, `nextSibling`, `enabled`) and writes to transform columns. Exposing storage would let user code corrupt tree invariants. The factory method on FlatWorld grants scoped access via closure without exposing storage publicly.
+
+**Tradeoff**: Engine systems require a factory method on FlatWorld per system type. Acceptable — there are few engine systems (propagation, future render collection). User systems remain pure functions over pools.
+
 ### Deferred Structural Mutations
 
 Systems enqueue structural commands into a CommandBuffer. Commands execute after all systems have run.
 
 **Why**: Structural mutations (destroy, attach, detach, reparent) change pool indices (swap-and-pop) and tree structure. Executing them mid-iteration corrupts the data a system is reading. Deferral guarantees pool index stability within a system's execution.
 
-**Tradeoff**: Systems cannot observe the results of their structural commands within the same frame. A system that creates and then queries a node must accept that the query uses pre-mutation state.
+**Tradeoff**: Systems cannot observe the results of their structural commands within the same frame. A system that creates and then queries a node must accept that the query uses pre-mutation state. For reparenting, this means the child's world transform reflects the old parent on the reparent frame and the new parent on the next frame.
 
 ### Runtime Authority Invariant
 

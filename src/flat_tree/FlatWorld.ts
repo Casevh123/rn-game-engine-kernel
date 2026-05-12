@@ -284,4 +284,94 @@ export class FlatWorld {
 
         this.commandBuffer.flush();
     }
+
+    createTransformPropagationSystem(): System {
+        const s: FlatTreeStorage = this._storage;
+        return (_world: FlatWorld, dt: number): void => {
+            const stack: number[] = [ROOT_ID];
+            while (stack.length > 0) {
+                const nodeId: number = stack.pop()!;
+                if (s.enabled[nodeId] === 0) {
+                    continue;
+                }
+
+                const parentId: number = s.parent[nodeId];
+                let pa: number = 1; // pa stands for parent [world] a, etc.
+                let pb: number = 0;
+                let px: number = 0;
+                let py: number = 0;
+                if (parentId !== NULL) {
+                    // parent world transforms
+                    pa = s.worldA[parentId];
+                    pb = s.worldB[parentId];
+                    px = s.worldTx[parentId];
+                    py = s.worldTy[parentId];
+                }
+
+                let la: number = s.localA[nodeId]; // la stands for [child] local a, etc
+                let lb: number = s.localB[nodeId];
+                let lx: number = s.localTx[nodeId];
+                let ly: number = s.localTy[nodeId];
+
+                s.worldA[nodeId] = pa * la - pb * lb;
+                s.worldB[nodeId] = pb * la + pa * lb;
+                s.worldTx[nodeId] = lx * pa - ly * pb + px;
+                s.worldTy[nodeId] = lx * pb + ly * pa + py;
+
+                // add children (it's gonna do them in reverse order)
+                let child: number = s.firstChild[nodeId];
+                while (child !== NULL) {
+                    stack.push(child);
+                    child = s.nextSibling[child];
+                }
+            }
+        }
+    }
+
+    setLocalTransform(ref: FlatNodeRef, a: number, b: number, tx: number, ty: number): void {
+        this.assertInWorld(ref);
+
+        this._storage.localA[ref.id] = a;
+        this._storage.localB[ref.id] = b;
+        this._storage.localTx[ref.id] = tx;
+        this._storage.localTy[ref.id] = ty;
+    }
+
+    getLocalTransform(ref: FlatNodeRef): {a: number, b: number, tx: number, ty: number} {
+        this.assertInWorld(ref);
+
+        return {
+            a: this._storage.localA[ref.id],
+            b: this._storage.localB[ref.id],
+            tx: this._storage.localTx[ref.id],
+            ty: this._storage.localTy[ref.id],
+        }
+    }
+
+    setLocalPosition(ref: FlatNodeRef, tx: number, ty: number): void {
+        this.assertInWorld(ref);
+
+        this._storage.localTx[ref.id] = tx;
+        this._storage.localTy[ref.id] = ty;
+    }
+
+    getWorldTransform(ref: FlatNodeRef): {a: number, b: number, tx: number, ty: number} {
+        this.assertInWorld(ref);
+
+        return {
+            a: this._storage.worldA[ref.id],
+            b: this._storage.worldB[ref.id],
+            tx: this._storage.worldTx[ref.id],
+            ty: this._storage.worldTy[ref.id],
+        }
+    }
+
+    /**
+     * @internal
+     *
+     * for testing purposes
+     */
+    getStorage(): FlatTreeStorage {
+        return this._storage;
+    }
 }

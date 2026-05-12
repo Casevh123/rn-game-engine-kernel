@@ -199,3 +199,164 @@ describe('movement proof (not official movement system, just example one)', () =
         expect(world.isAlive(node)).toBe(false);
     })
 })
+
+describe('transform end-to-end', () => {
+    class VelocityPool extends ComponentPool {
+        vx: Float32Array;
+        vy: Float32Array;
+
+        constructor(world: FlatWorld, capacity: number) {
+            super(world, capacity);
+            this.vx = new Float32Array(capacity);
+            this.vy = new Float32Array(capacity);
+        }
+
+        protected swapComponentData(indexA: number, indexB: number): void {
+            let tmp: number;
+            tmp = this.vx[indexA]; this.vx[indexA] = this.vx[indexB]; this.vx[indexB] = tmp;
+            tmp = this.vy[indexA]; this.vy[indexA] = this.vy[indexB]; this.vy[indexB] = tmp;
+        }
+    }
+
+    function createMovementSystem(velPool: VelocityPool): System {
+        return (_world: FlatWorld, dt: number) => {
+            for (let i: number = 0; i < velPool.count; i++) {
+                const node: FlatNodeRef = velPool.getNode(i);
+
+                const currentTransform: { a: number, b: number, tx: number, ty: number } = _world.getLocalTransform(node);
+                _world.setLocalPosition(node, currentTransform.tx + velPool.vx[i] * dt, currentTransform.ty + velPool.vy[i] * dt);
+            }
+        }
+    }
+
+    it('Movement system + transform propagation', () => {
+        const world: FlatWorld = new FlatWorld(10);
+        const parent: FlatNodeRef = world.root;
+        const child: FlatNodeRef = world.createNode();
+        world.attach(child, parent);
+        const velPool: VelocityPool = new VelocityPool(world, 5);
+        world.registerPool(velPool);
+        velPool.add(parent);
+        velPool.vx[velPool.get(parent)] = 1;
+        velPool.vy[velPool.get(parent)] = 2;
+        const movementSystem: System = createMovementSystem(velPool);
+        const propagationSystem: System = world.createTransformPropagationSystem();
+        world.addSystem(movementSystem);
+        world.addSystem(propagationSystem);
+
+        let parentTransform: { a: number, b: number, tx: number, ty: number } = world.getWorldTransform(parent);
+        let childTransform: { a: number, b: number, tx: number, ty: number } = world.getWorldTransform(child);
+        expect(parentTransform).toEqual({ a: 1, b: 0, tx: 0, ty: 0 });
+        expect(childTransform).toEqual({ a: 1, b: 0, tx: 0, ty: 0 });
+        world.step(1);
+        parentTransform = world.getWorldTransform(parent);
+        childTransform = world.getWorldTransform(child);
+        expect(parentTransform).toEqual({ a: 1, b: 0, tx: 1, ty: 2 });
+        expect(childTransform).toEqual({ a: 1, b: 0, tx: 1, ty: 2 });
+        world.step(1);
+        parentTransform = world.getWorldTransform(parent);
+        childTransform = world.getWorldTransform(child);
+        expect(parentTransform).toEqual({ a: 1, b: 0, tx: 2, ty: 4});
+        expect(childTransform).toEqual({ a: 1, b: 0, tx: 2, ty: 4 });
+    })
+
+    it('Movement + propagation + deferred destroy', () => {
+        const world: FlatWorld = new FlatWorld(10);
+        const parent: FlatNodeRef = world.root;
+        const child: FlatNodeRef = world.createNode();
+        world.attach(child, parent);
+        const velPool: VelocityPool = new VelocityPool(world, 5);
+        world.registerPool(velPool);
+        velPool.add(parent);
+        velPool.vx[velPool.get(parent)] = 1;
+        velPool.vy[velPool.get(parent)] = 2;
+        const movementSystem: System = createMovementSystem(velPool);
+        const propagationSystem: System = world.createTransformPropagationSystem();
+        const destroyChild: System = (_world: FlatWorld, _: number) => {
+            if (_world.isAlive(child)) {
+                _world.commandBuffer.destroy(child);
+            }
+        }
+        world.addSystem(movementSystem);
+        world.addSystem(propagationSystem);
+        world.addSystem(destroyChild);
+
+        let parentTransform: { a: number, b: number, tx: number, ty: number } = world.getWorldTransform(parent);
+        expect(parentTransform).toEqual({ a: 1, b: 0, tx: 0, ty: 0 });
+        expect(() => world.step(1)).not.toThrow();
+        parentTransform = world.getWorldTransform(parent);
+        expect(parentTransform).toEqual({ a: 1, b: 0, tx: 1, ty: 2 });
+        expect(world.isAlive(child)).toBe(false);
+        expect(() => world.step(1)).not.toThrow();
+        parentTransform = world.getWorldTransform(parent);
+        expect(parentTransform).toEqual({ a: 1, b: 0, tx: 2, ty: 4});
+        expect(world.isAlive(child)).toBe(false);
+    })
+
+    it('Reparent during step + propagation on next step', () => {
+        const world: FlatWorld = new FlatWorld(10);
+        const parentA: FlatNodeRef = world.createNode();
+        const parentB: FlatNodeRef = world.createNode();
+        const child: FlatNodeRef = world.createNode();
+        world.attach(parentA, world.root);
+        world.attach(parentB, world.root);
+        world.attach(child, parentA)
+        const velPool: VelocityPool = new VelocityPool(world, 5);
+        world.registerPool(velPool);
+        velPool.add(parentA);
+        velPool.add(parentB);
+        velPool.vx[velPool.get(parentA)] = 1;
+        velPool.vy[velPool.get(parentA)] = 1;
+        velPool.vx[velPool.get(parentB)] = 2;
+        velPool.vy[velPool.get(parentB)] = 2;
+        const movementSystem: System = createMovementSystem(velPool);
+        const propagationSystem: System = world.createTransformPropagationSystem();
+        const reparentChild: System = (_world: FlatWorld, _: number) => {
+            if (_world.getParent(child)?.equals(parentA)) {
+                _world.commandBuffer.reparent(child, parentB);
+            }
+        }
+        world.addSystem(movementSystem);
+        world.addSystem(propagationSystem);
+        world.addSystem(reparentChild);
+
+        let childTransform: { a: number, b: number, tx: number, ty: number } = world.getWorldTransform(child);
+        expect(childTransform).toEqual({ a: 1, b: 0, tx: 0, ty: 0 });
+        expect(() => world.step(1)).not.toThrow();
+
+        // Child has been reparented but the transform data is behind a frame
+        childTransform = world.getWorldTransform(child);
+        expect(childTransform).toEqual({ a: 1, b: 0, tx: 1, ty: 1 });
+        expect(world.getParent(child)?.equals(parentB)).toBe(true);
+        expect(() => world.step(1)).not.toThrow();
+        childTransform = world.getWorldTransform(child);
+        expect(childTransform).toEqual({ a: 1, b: 0, tx: 4, ty: 4});
+        expect(world.getParent(child)?.equals(parentB)).toBe(true);
+    })
+
+    it('Disabled node re-enabled → next step propagates correctly', () => {
+        const world: FlatWorld = new FlatWorld(10);
+        const node: FlatNodeRef = world.createNode();
+        world.attach(node, world.root);
+        const velPool: VelocityPool = new VelocityPool(world, 5);
+        world.registerPool(velPool);
+        velPool.add(node);
+        velPool.vx[velPool.get(node)] = 1;
+        velPool.vy[velPool.get(node)] = 1;
+        const movementSystem: System = createMovementSystem(velPool);
+        const propagationSystem: System = world.createTransformPropagationSystem();
+        world.addSystem(movementSystem);
+        world.addSystem(propagationSystem);
+
+        let nodeTransform: { a: number, b: number, tx: number, ty: number } = world.getWorldTransform(node);
+        expect(nodeTransform).toEqual({ a: 1, b: 0, tx: 0, ty: 0 });
+        world.setEnabled(node, false);
+        world.step(1);
+        nodeTransform = world.getWorldTransform(node);
+        expect(nodeTransform).toEqual({ a: 1, b: 0, tx: 0, ty: 0 });
+        world.setEnabled(node, true);
+        world.step(1);
+        nodeTransform = world.getWorldTransform(node);
+        expect(nodeTransform).toEqual({ a: 1, b: 0, tx: 2, ty: 2 });
+    })
+})

@@ -10,10 +10,11 @@ The architecture uses struct-of-arrays (SoA) layout, generational indices, and d
 
 ## Architecture
 
-- **SoA memory pool** — fixed-capacity `Int32Array` columns for all node data
+- **SoA memory pool** — fixed-capacity typed array columns for all node data
 - **Generational indices** — `(id, version)` references prevent use-after-free on slot reuse
 - **Doubly-linked sibling lists** — O(1) attach/detach
 - **Dense component pools** — swap-and-pop removal, one pool per component type
+- **Transforms** — RSXform layout (sCosθ, sSinθ, tx, ty) per node, local + world. Trig-free composition via pre-order tree walk
 - **Systems** — `(world, dt) → void` functions that read/write pool data
 - **Command buffer** — deferred structural mutations, flushed after all systems run
 - **Frame loop** — `World.step(dt)` runs systems sequentially then flushes commands
@@ -28,8 +29,9 @@ Tests are the executable spec. Docs capture what tests can't: the model, the inv
 
 ## Status
 
-**Core kernel complete** — tree operations, component pools, execution model (systems + command buffer + frame loop) are implemented and tested. Next milestone: transform propagation.
+**Kernel functionally complete** — tree operations, component pools, execution model, and transform propagation are implemented and tested (~196 tests). Next milestone: user-facing API design (script hooks, React reconciler, engine system auto-registration).
 
 ```
 npm test
 ```
+

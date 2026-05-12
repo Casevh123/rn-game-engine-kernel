@@ -11,6 +11,18 @@ export class FlatTreeStorage {
     readonly freeNext: Int32Array;
     private freeHead: number;
 
+    // Local transform (relative to parent)
+    readonly localA: Float32Array; // sCos
+    readonly localB: Float32Array; // sSin
+    readonly localTx: Float32Array;
+    readonly localTy: Float32Array;
+
+    // World transform (computer by propagation system)
+    readonly worldA: Float32Array;
+    readonly worldB: Float32Array;
+    readonly worldTx: Float32Array;
+    readonly worldTy: Float32Array;
+
     constructor(readonly capacity: number) {
         if (capacity < 1) {
             throw new Error("Capacity must be at least 1");
@@ -24,6 +36,14 @@ export class FlatTreeStorage {
         this.enabled = new Int32Array(capacity);
         this.version = new Int32Array(capacity);
         this.freeNext = new Int32Array(capacity);
+        this.localA = new Float32Array(capacity);
+        this.localB = new Float32Array(capacity);
+        this.localTx = new Float32Array(capacity);
+        this.localTy = new Float32Array(capacity);
+        this.worldA = new Float32Array(capacity);
+        this.worldB = new Float32Array(capacity);
+        this.worldTx = new Float32Array(capacity);
+        this.worldTy = new Float32Array(capacity);
 
         this.parent.fill(NULL);
         this.firstChild.fill(NULL);
@@ -33,6 +53,14 @@ export class FlatTreeStorage {
         this.enabled.fill(1);
         this.version.fill(0);
         this.freeNext.fill(NULL);
+        this.localA.fill(1);
+        this.localB.fill(0);
+        this.localTx.fill(0);
+        this.localTy.fill(0);
+        this.worldA.fill(1);
+        this.worldB.fill(0);
+        this.worldTx.fill(0);
+        this.worldTy.fill(0);
 
         this.alive[ROOT_ID] = 1;
         this.version[ROOT_ID] = 1;
@@ -62,6 +90,14 @@ export class FlatTreeStorage {
         this.firstChild[id] = NULL;
         this.nextSibling[id] = NULL;
         this.prevSibling[id] = NULL;
+        this.localA[id] = 1;
+        this.localB[id] = 0;
+        this.localTx[id] = 0;
+        this.localTy[id] = 0;
+        this.worldA[id] = 1;
+        this.worldB[id] = 0;
+        this.worldTx[id] = 0;
+        this.worldTy[id] = 0;
 
         return { id, version: this.version[id] };
     }
@@ -77,6 +113,14 @@ export class FlatTreeStorage {
         this.firstChild[id] = NULL;
         this.nextSibling[id] = NULL;
         this.prevSibling[id] = NULL;
+        this.localA[id] = 1;
+        this.localB[id] = 0;
+        this.localTx[id] = 0;
+        this.localTy[id] = 0;
+        this.worldA[id] = 1;
+        this.worldB[id] = 0;
+        this.worldTx[id] = 0;
+        this.worldTy[id] = 0;
 
         this.freeNext[id] = this.freeHead;
         this.freeHead = id;
