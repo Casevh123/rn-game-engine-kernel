@@ -1,13 +1,12 @@
-import {FlatNodeRef} from "./FlatNodeRef";
 import {FlatTreeStorage} from "./FlatTreeStorage";
 import {NULL, ROOT_ID} from "./constants";
 import {ComponentPool} from "./ComponentPool";
 import {CommandBuffer} from "./CommandBuffer";
-import {System} from "./types";
+import {System, NodeHandle} from "./types";
 
 export class FlatWorld {
     private _storage: FlatTreeStorage;
-    readonly root: FlatNodeRef;
+    readonly root: NodeHandle;
     private _pools: Set<ComponentPool> = new Set();
     private _systems: System[] = [];
     private _stepping: boolean = false;
@@ -15,50 +14,43 @@ export class FlatWorld {
 
     constructor(capacity: number) {
         this._storage = new FlatTreeStorage(capacity);
-        this.root = new FlatNodeRef(this, ROOT_ID, this._storage.version[ROOT_ID]);
+        this.root = { id: ROOT_ID, version: this._storage.version[ROOT_ID] };
         this.commandBuffer = new CommandBuffer(this);
     }
 
     get capacity(): number { return this._storage.capacity; }
 
-    createNode(): FlatNodeRef {
+    createNode(): NodeHandle {
         const { id, version } = this._storage.allocate();
-        return new FlatNodeRef(this, id, version);
+        return { id, version };
     }
 
-    assertValidRef(ref: FlatNodeRef): void {
+    assertValidRef(ref: NodeHandle): void {
         this._storage.assertValidRef(ref.id, ref.version);
     }
 
-    assertInWorld(ref: FlatNodeRef): void {
-        if (!ref.belongsTo(this)) {
-            throw new Error("Node does not belong to this world");
-        }
+    isEnabled(ref: NodeHandle): boolean {
         this.assertValidRef(ref);
-    }
-
-    isEnabled(ref: FlatNodeRef): boolean {
-        this.assertInWorld(ref);
         return this._storage.enabled[ref.id] === 1;
     }
 
-    setEnabled(ref: FlatNodeRef, enabled: boolean) {
-        this.assertInWorld(ref);
+    setEnabled(ref: NodeHandle, enabled: boolean) {
+        this.assertValidRef(ref);
         this._storage.enabled[ref.id] = enabled ? 1 : 0;
     }
 
-    getParent(ref: FlatNodeRef): FlatNodeRef | null {
-        this.assertInWorld(ref);
+    getParent(ref: NodeHandle): NodeHandle | null {
+        this.assertValidRef(ref);
         if (this._storage.parent[ref.id] === NULL) {
             return null;
         }
 
         const id: number = this._storage.parent[ref.id];
-        return new FlatNodeRef(this, id, this._storage.version[id]);
+        return { id, version: this._storage.version[id] };
     }
 
-    getChildren(ref: FlatNodeRef): FlatNodeRef[] {
-        this.assertInWorld(ref);
+    getChildren(ref: NodeHandle): NodeHandle[] {
+        this.assertValidRef(ref);
         const bareChildren: {id: number, version: number}[] = []
         let current: number = this._storage.firstChild[ref.id];
         while (current !== NULL) {
@@ -66,24 +58,21 @@ export class FlatWorld {
             current = this._storage.nextSibling[current];
         }
 
-        return bareChildren.map(bare => new FlatNodeRef(this, bare.id, bare.version));
+        return bareChildren.map(bare => ({ id: bare.id, version: bare.version }));
     }
 
-    isAlive(ref: FlatNodeRef): boolean {
-        if (!ref.belongsTo(this)) {
-            throw new Error("Node does not belong to this world");
-        }
+    isAlive(ref: NodeHandle): boolean {
         return this._storage.alive[ref.id] === 1
             && this._storage.version[ref.id] === ref.version;
     }
 
-    attach(child: FlatNodeRef, parent: FlatNodeRef): void {
+    attach(child: NodeHandle, parent: NodeHandle): void {
         if (this._stepping) {
             throw new Error("Cannot attach during step, use commandBuffer")
         }
 
-        this.assertInWorld(child);
-        this.assertInWorld(parent);
+        this.assertValidRef(child);
+        this.assertValidRef(parent);
 
         if (child.id === ROOT_ID) throw new Error("Cannot attach root");
         if (child.id === parent.id) throw new Error("Cannot attach a node to itself");
@@ -104,12 +93,12 @@ export class FlatWorld {
         }
     }
 
-    detach(child: FlatNodeRef): void {
+    detach(child: NodeHandle): void {
         if (this._stepping) {
             throw new Error("Cannot detach during step, use commandBuffer")
         }
 
-        this.assertInWorld(child);
+        this.assertValidRef(child);
 
         if (child.id === ROOT_ID) throw new Error("Cannot detach root");
 
@@ -134,12 +123,12 @@ export class FlatWorld {
         this._storage.nextSibling[child.id] = NULL;
     }
 
-    destroy(node: FlatNodeRef): void {
+    destroy(node: NodeHandle): void {
         if (this._stepping) {
             throw new Error("Cannot destroy during step, use commandBuffer")
         }
 
-        this.assertInWorld(node);
+        this.assertValidRef(node);
         if (node.id === ROOT_ID) {
             throw new Error("Cannot destroy root node");
         }
@@ -189,13 +178,13 @@ export class FlatWorld {
         this._storage.free(id)
     }
 
-    reparent(node: FlatNodeRef, parent: FlatNodeRef): void {
+    reparent(node: NodeHandle, parent: NodeHandle): void {
         if (this._stepping) {
             throw new Error("Cannot reparent during step, use commandBuffer")
         }
 
-        this.assertInWorld(node);
-        this.assertInWorld(parent);
+        this.assertValidRef(node);
+        this.assertValidRef(parent);
 
         if (node.id === ROOT_ID) {
             throw new Error("Cannot reparent root node");
@@ -328,8 +317,8 @@ export class FlatWorld {
         }
     }
 
-    setLocalTransform(ref: FlatNodeRef, a: number, b: number, tx: number, ty: number): void {
-        this.assertInWorld(ref);
+    setLocalTransform(ref: NodeHandle, a: number, b: number, tx: number, ty: number): void {
+        this.assertValidRef(ref);
 
         this._storage.localA[ref.id] = a;
         this._storage.localB[ref.id] = b;
@@ -337,8 +326,8 @@ export class FlatWorld {
         this._storage.localTy[ref.id] = ty;
     }
 
-    getLocalTransform(ref: FlatNodeRef): {a: number, b: number, tx: number, ty: number} {
-        this.assertInWorld(ref);
+    getLocalTransform(ref: NodeHandle): {a: number, b: number, tx: number, ty: number} {
+        this.assertValidRef(ref);
 
         return {
             a: this._storage.localA[ref.id],
@@ -348,15 +337,15 @@ export class FlatWorld {
         }
     }
 
-    setLocalPosition(ref: FlatNodeRef, tx: number, ty: number): void {
-        this.assertInWorld(ref);
+    setLocalPosition(ref: NodeHandle, tx: number, ty: number): void {
+        this.assertValidRef(ref);
 
         this._storage.localTx[ref.id] = tx;
         this._storage.localTy[ref.id] = ty;
     }
 
-    getWorldTransform(ref: FlatNodeRef): {a: number, b: number, tx: number, ty: number} {
-        this.assertInWorld(ref);
+    getWorldTransform(ref: NodeHandle): {a: number, b: number, tx: number, ty: number} {
+        this.assertValidRef(ref);
 
         return {
             a: this._storage.worldA[ref.id],

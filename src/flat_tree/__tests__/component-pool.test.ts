@@ -1,6 +1,6 @@
 import {ComponentPool} from "../ComponentPool";
 import {FlatWorld} from "../FlatWorld";
-import {FlatNodeRef} from "../FlatNodeRef";
+import {NodeHandle, refEquals} from "../types";
 import {NULL} from "../constants";
 
 
@@ -23,9 +23,9 @@ describe('component pool', () => {
     describe('Happy Paths', () => {
         it('add returns sequential component IDS', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const root: FlatNodeRef = world.root;
-            const node1: FlatNodeRef = world.createNode();
-            const node2: FlatNodeRef = world.createNode();
+            const root: NodeHandle = world.root;
+            const node1: NodeHandle = world.createNode();
+            const node2: NodeHandle = world.createNode();
             const pool: TestPool = new TestPool(world, 5);
 
             const id0: number = pool.add(root);
@@ -39,7 +39,7 @@ describe('component pool', () => {
 
         it('has returns true false before add and true after', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const root: FlatNodeRef = world.root;
+            const root: NodeHandle = world.root;
             const pool: TestPool = new TestPool(world, 5);
 
             expect(pool.has(root)).toBe(false);
@@ -49,7 +49,7 @@ describe('component pool', () => {
 
         it('get returns the correct component id', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const root: FlatNodeRef = world.root;
+            const root: NodeHandle = world.root;
             const pool: TestPool = new TestPool(world, 5);
 
             const id: number = pool.add(root);
@@ -59,7 +59,7 @@ describe('component pool', () => {
 
         it('getByNodeId returns the correct component id', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const root: FlatNodeRef = world.root;
+            const root: NodeHandle = world.root;
             const pool: TestPool = new TestPool(world, 5);
 
             const id: number = pool.add(root);
@@ -69,7 +69,7 @@ describe('component pool', () => {
 
         it(`getByNodeId returns ${NULL} for node that doesn't have the component`, () => {
             const world: FlatWorld = new FlatWorld(10);
-            const root: FlatNodeRef = world.root;
+            const root: NodeHandle = world.root;
             const pool: TestPool = new TestPool(world, 5);
 
             expect(pool.getByNodeId(root.id)).toBe(NULL);
@@ -77,9 +77,9 @@ describe('component pool', () => {
 
         it('getByNodeId returns correct index after swap and pop', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const root: FlatNodeRef = world.root;
-            const node1: FlatNodeRef = world.createNode();
-            const node2: FlatNodeRef = world.createNode();
+            const root: NodeHandle = world.root;
+            const node1: NodeHandle = world.createNode();
+            const node2: NodeHandle = world.createNode();
             const pool: TestPool = new TestPool(world, 5);
             pool.add(root);
             pool.add(node1);
@@ -95,7 +95,7 @@ describe('component pool', () => {
 
         it('increments count on add', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const root: FlatNodeRef = world.root;
+            const root: NodeHandle = world.root;
             const pool: TestPool = new TestPool(world, 5);
 
 
@@ -107,7 +107,7 @@ describe('component pool', () => {
 
         it('decrements count on remove', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const root: FlatNodeRef = world.root;
+            const root: NodeHandle = world.root;
             const pool: TestPool = new TestPool(world, 5);
 
             pool.add(root);
@@ -119,7 +119,7 @@ describe('component pool', () => {
 
         it('nodeIdAt(i) returns correct node id', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const root: FlatNodeRef = world.root;
+            const root: NodeHandle = world.root;
             const pool: TestPool = new TestPool(world, 5);
 
             const id0: number = pool.add(root);
@@ -127,19 +127,19 @@ describe('component pool', () => {
             expect(pool.nodeIdAt(id0)).toBe(root.id);
         })
 
-        it('getNode(i) returns correct node', () => {
+        it('getNodeHandle(i) returns correct handle', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const root: FlatNodeRef = world.root;
+            const root: NodeHandle = world.root;
             const pool: TestPool = new TestPool(world, 5);
 
             const id0: number = pool.add(root);
 
-            expect(pool.getNode(id0).equals(root)).toBe(true);
+            expect(refEquals(pool.getNodeHandle(id0), root)).toBe(true);
         })
 
         it('after remove has return false', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const root: FlatNodeRef = world.root;
+            const root: NodeHandle = world.root;
             const pool: TestPool = new TestPool(world, 5);
 
             const id0: number = pool.add(root);
@@ -151,7 +151,7 @@ describe('component pool', () => {
 
         it('after remove data can be read added to the same node', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const root: FlatNodeRef = world.root;
+            const root: NodeHandle = world.root;
             const pool: TestPool = new TestPool(world, 5);
 
             pool.add(root);
@@ -164,9 +164,9 @@ describe('component pool', () => {
     describe('Swap and Pop', () => {
         it('if you remove first of 3, last component gets moved to index 0, data swaps', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const node1: FlatNodeRef = world.createNode();
-            const node2: FlatNodeRef = world.createNode();
-            const node3: FlatNodeRef = world.createNode();
+            const node1: NodeHandle = world.createNode();
+            const node2: NodeHandle = world.createNode();
+            const node3: NodeHandle = world.createNode();
             const pool: TestPool = new TestPool(world, 5);
 
             pool.add(node1);
@@ -185,8 +185,8 @@ describe('component pool', () => {
 
         it('after remove, get() returns new index for moved component', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const node1: FlatNodeRef = world.createNode();
-            const node2: FlatNodeRef = world.createNode();
+            const node1: NodeHandle = world.createNode();
+            const node2: NodeHandle = world.createNode();
             const pool: TestPool = new TestPool(world, 5);
 
             pool.add(node1);
@@ -199,8 +199,8 @@ describe('component pool', () => {
 
         it('after swap, nodeIdAt() at swapped index returns the moved nodes id', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const node1: FlatNodeRef = world.createNode();
-            const node2: FlatNodeRef = world.createNode();
+            const node1: NodeHandle = world.createNode();
+            const node2: NodeHandle = world.createNode();
             const pool: TestPool = new TestPool(world, 5);
 
             expect(node1.id).not.toEqual(node2.id);
@@ -214,9 +214,9 @@ describe('component pool', () => {
 
         it('removes last component, no swap needed, count decrements, data intact for other (edge case)', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const node1: FlatNodeRef = world.createNode();
-            const node2: FlatNodeRef = world.createNode();
-            const node3: FlatNodeRef = world.createNode();
+            const node1: NodeHandle = world.createNode();
+            const node2: NodeHandle = world.createNode();
+            const node3: NodeHandle = world.createNode();
             const pool: TestPool = new TestPool(world, 5);
 
             pool.add(node1);
@@ -235,7 +235,7 @@ describe('component pool', () => {
 
         it('Remove only component, count becomes 0', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const node: FlatNodeRef = world.createNode();
+            const node: NodeHandle = world.createNode();
             const pool: TestPool = new TestPool(world, 5);
 
             pool.add(node);
@@ -247,9 +247,9 @@ describe('component pool', () => {
 
         it('remove middle of three -> last moves into middle spot', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const node1: FlatNodeRef = world.createNode();
-            const node2: FlatNodeRef = world.createNode();
-            const node3: FlatNodeRef = world.createNode();
+            const node1: NodeHandle = world.createNode();
+            const node2: NodeHandle = world.createNode();
+            const node3: NodeHandle = world.createNode();
             const pool: TestPool = new TestPool(world, 5);
 
             pool.add(node1);
@@ -269,7 +269,7 @@ describe('component pool', () => {
     describe('Error cases', () => {
         it('cannot add dead/stale ref', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const doomedNode: FlatNodeRef = world.createNode();
+            const doomedNode: NodeHandle = world.createNode();
             const pool: TestPool = new TestPool(world, 5);
 
             world.destroy(doomedNode);
@@ -277,14 +277,6 @@ describe('component pool', () => {
             expect(doomedNode.id).toBe(reincarnatedNode.id);
 
             expect(() => pool.add(doomedNode)).toThrow("Stale node reference")
-        })
-
-        it('cannot add cross world refs', () => {
-            const world1: FlatWorld = new FlatWorld(10);
-            const world2: FlatWorld = new FlatWorld(10);
-            const pool: TestPool = new TestPool(world1, 5);
-
-            expect(() => pool.add(world2.root)).toThrow("Node does not belong to this world");
         })
 
         it('cannot add duplicate nodes (one component per node)', () => {
@@ -298,7 +290,7 @@ describe('component pool', () => {
 
         it('cannot add when at capacity', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const node: FlatNodeRef = world.createNode();
+            const node: NodeHandle = world.createNode();
             const pool: TestPool = new TestPool(world, 1);
 
             pool.add(world.root);
@@ -308,7 +300,7 @@ describe('component pool', () => {
 
         it('cannot remove from node without component', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const node: FlatNodeRef = world.createNode();
+            const node: NodeHandle = world.createNode();
             const pool: TestPool = new TestPool(world, 5);
 
             expect(() => pool.remove(node)).toThrow("Node does not have this component");
@@ -316,30 +308,20 @@ describe('component pool', () => {
 
         it('cannot remove from dead/stale ref', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const doomedNode: FlatNodeRef = world.createNode();
+            const doomedNode: NodeHandle = world.createNode();
             const pool: TestPool = new TestPool(world, 5);
 
             pool.add(doomedNode);
             world.destroy(doomedNode);
-            const reincarnatedNode: FlatNodeRef = world.createNode();
+            const reincarnatedNode: NodeHandle = world.createNode();
             expect(doomedNode.id).toBe(reincarnatedNode.id);
 
             expect(() => pool.remove(doomedNode)).toThrow("Stale node reference")
         })
 
-        it('cannot remove cross world refs', () => {
-            const world1: FlatWorld = new FlatWorld(10);
-            const world2: FlatWorld = new FlatWorld(10);
-            const pool: TestPool = new TestPool(world1, 5);
-
-            pool.add(world1.root);
-
-            expect(() => pool.remove(world2.root)).toThrow("Node does not belong to this world");
-        })
-
         it('get throws when node doesnt have a component', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const node: FlatNodeRef = world.createNode();
+            const node: NodeHandle = world.createNode();
             const pool: TestPool = new TestPool(world, 5);
 
             expect(() => pool.get(node)).toThrow("Node does not have this component")
@@ -347,7 +329,7 @@ describe('component pool', () => {
 
         it('has returns false for node that doesnt have a component', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const node: FlatNodeRef = world.createNode();
+            const node: NodeHandle = world.createNode();
             const pool: TestPool = new TestPool(world, 5);
 
             expect(pool.has(node)).toBe(false);
@@ -369,14 +351,6 @@ describe('component pool', () => {
             expect(() => world.registerPool(pool)).not.toThrow();
         })
 
-        it('Cannot register pool from different world', () => {
-            const world1: FlatWorld = new FlatWorld(10);
-            const world2: FlatWorld = new FlatWorld(10);
-            const pool: TestPool = new TestPool(world1, 5);
-
-            expect(() => world2.registerPool(pool)).toThrow("Pool does not belong to this world");
-        })
-
         it('Cannot register the same pool twice', () => {
             const world: FlatWorld = new FlatWorld(10);
             const pool: TestPool = new TestPool(world, 5);
@@ -388,8 +362,8 @@ describe('component pool', () => {
 
         it('destroy removes components', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const root: FlatNodeRef = world.root;
-            const node: FlatNodeRef = world.createNode();
+            const root: NodeHandle = world.root;
+            const node: NodeHandle = world.createNode();
             const pool: TestPool = new TestPool(world, 5);
             world.registerPool(pool);
 
@@ -403,10 +377,10 @@ describe('component pool', () => {
 
         it('destroy subtree removes all descendent components', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const root: FlatNodeRef = world.root;
-            const node1: FlatNodeRef = world.createNode();
-            const node2: FlatNodeRef = world.createNode();
-            const node3: FlatNodeRef = world.createNode();
+            const root: NodeHandle = world.root;
+            const node1: NodeHandle = world.createNode();
+            const node2: NodeHandle = world.createNode();
+            const node3: NodeHandle = world.createNode();
             const pool: TestPool = new TestPool(world, 5);
 
             world.registerPool(pool);
@@ -424,10 +398,10 @@ describe('component pool', () => {
 
         it('After destroy cleanup, freed spots are reusable', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const root: FlatNodeRef = world.root;
-            const node1: FlatNodeRef = world.createNode();
-            const node2: FlatNodeRef = world.createNode();
-            const node3: FlatNodeRef = world.createNode();
+            const root: NodeHandle = world.root;
+            const node1: NodeHandle = world.createNode();
+            const node2: NodeHandle = world.createNode();
+            const node3: NodeHandle = world.createNode();
             const pool: TestPool = new TestPool(world, 5);
 
             world.registerPool(pool);
@@ -441,9 +415,9 @@ describe('component pool', () => {
             const doomedComponentIds: number[] = [pool.get(node1), pool.get(node2), pool.get(node3)];
             world.destroy(node1);
 
-            const node4: FlatNodeRef = world.createNode();
-            const node5: FlatNodeRef = world.createNode();
-            const node6: FlatNodeRef = world.createNode();
+            const node4: NodeHandle = world.createNode();
+            const node5: NodeHandle = world.createNode();
+            const node6: NodeHandle = world.createNode();
             pool.add(node4);
             pool.add(node5);
             pool.add(node6);
@@ -456,9 +430,9 @@ describe('component pool', () => {
 
         it('destroy with unregistered pool does not effect that pool', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const root: FlatNodeRef = world.root;
-            const node1: FlatNodeRef = world.createNode();
-            const node2: FlatNodeRef = world.createNode();
+            const root: NodeHandle = world.root;
+            const node1: NodeHandle = world.createNode();
+            const node2: NodeHandle = world.createNode();
             const pool: TestPool = new TestPool(world, 5);
 
             world.attach(node1, root);
@@ -473,9 +447,9 @@ describe('component pool', () => {
 
         it('Surviving nodes\' components unaffected after sibling destroyed', () => {
             const world: FlatWorld = new FlatWorld(10);
-            const root: FlatNodeRef = world.root;
-            const node1: FlatNodeRef = world.createNode();
-            const node2: FlatNodeRef = world.createNode();
+            const root: NodeHandle = world.root;
+            const node1: NodeHandle = world.createNode();
+            const node2: NodeHandle = world.createNode();
             const pool: TestPool = new TestPool(world, 5);
 
             world.registerPool(pool);

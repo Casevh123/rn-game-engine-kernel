@@ -1,5 +1,5 @@
 import {FlatWorld} from "./FlatWorld";
-import {FlatNodeRef} from "./FlatNodeRef";
+import {NodeHandle} from "./types";
 
 export class CommandBuffer {
     private _world: FlatWorld;
@@ -9,19 +9,19 @@ export class CommandBuffer {
         this._world = world;
     }
 
-    destroy(ref: FlatNodeRef): void {
+    destroy(ref: NodeHandle): void {
         this._queue.push((): void => this._world.destroy(ref));
     }
 
-    attach(child: FlatNodeRef, parent: FlatNodeRef): void {
+    attach(child: NodeHandle, parent: NodeHandle): void {
         this._queue.push((): void => this._world.attach(child, parent));
     }
 
-    detach(child: FlatNodeRef): void {
+    detach(child: NodeHandle): void {
         this._queue.push((): void => this._world.detach(child));
     }
 
-    reparent(node: FlatNodeRef, newParent: FlatNodeRef): void {
+    reparent(node: NodeHandle, newParent: NodeHandle): void {
         this._queue.push((): void => this._world.reparent(node, newParent));
     }
 

@@ -1,43 +1,43 @@
 import {FlatWorld} from "../FlatWorld";
-import {FlatNodeRef} from "../FlatNodeRef";
+import {NodeHandle} from "../types";
 import {FlatTreeStorage} from "../FlatTreeStorage";
 
 describe('storage initialization', () => {
     it('new node has identity local transform', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const node: FlatNodeRef = world.createNode();
+        const node: NodeHandle = world.createNode();
 
         expect(world.getLocalTransform(node)).toEqual({a: 1, b: 0, tx: 0, ty: 0});
     })
 
     it('new node has identity world transform', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const node: FlatNodeRef = world.createNode();
+        const node: NodeHandle = world.createNode();
 
         expect(world.getWorldTransform(node)).toEqual({a: 1, b: 0, tx: 0, ty: 0});
     })
 
     it('root has identity local transform', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const node: FlatNodeRef = world.root;
+        const node: NodeHandle = world.root;
 
         expect(world.getLocalTransform(node)).toEqual({a: 1, b: 0, tx: 0, ty: 0});
     })
 
     it('root has identity world transform', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const node: FlatNodeRef = world.root;
+        const node: NodeHandle = world.root;
 
         expect(world.getWorldTransform(node)).toEqual({a: 1, b: 0, tx: 0, ty: 0});
     })
 
     it('Destroyed and reallocated slot has identity local transform', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const doomedNode: FlatNodeRef = world.createNode();
+        const doomedNode: NodeHandle = world.createNode();
 
         world.setLocalTransform(doomedNode, 10, 10, 10, 10);
         world.destroy(doomedNode);
-        const reincarnatedNode: FlatNodeRef = world.createNode();
+        const reincarnatedNode: NodeHandle = world.createNode();
         expect(reincarnatedNode.id).toEqual(doomedNode.id);
         expect(reincarnatedNode.version).toEqual(doomedNode.version + 1);
 
@@ -68,7 +68,7 @@ describe('Accessor validation', () => {
     it('setLocalTransform sets all 4 values correctly', () => {
         const world: FlatWorld = new FlatWorld(10);
         const storage: FlatTreeStorage = world.getStorage();
-        const node: FlatNodeRef = world.createNode();
+        const node: NodeHandle = world.createNode();
 
         world.setLocalTransform(node, 10, 10, 10, 10);
 
@@ -81,7 +81,7 @@ describe('Accessor validation', () => {
     it('getLocalTransform gets the correct value', () => {
         const world: FlatWorld = new FlatWorld(10);
         const storage: FlatTreeStorage = world.getStorage();
-        const node: FlatNodeRef = world.createNode();
+        const node: NodeHandle = world.createNode();
 
         storage.localA[node.id] = 10;
         storage.localB[node.id] = 10;
@@ -94,7 +94,7 @@ describe('Accessor validation', () => {
     it('getWorldTransform gets the correct value', () => {
         const world: FlatWorld = new FlatWorld(10);
         const storage: FlatTreeStorage = world.getStorage();
-        const node: FlatNodeRef = world.createNode();
+        const node: NodeHandle = world.createNode();
 
         storage.worldA[node.id] = 10;
         storage.worldB[node.id] = 10;
@@ -106,9 +106,9 @@ describe('Accessor validation', () => {
 
     it('setLocalTransform rejects stale ref', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const doomedNode: FlatNodeRef = world.createNode();
+        const doomedNode: NodeHandle = world.createNode();
         world.destroy(doomedNode);
-        const reincarnatedNode: FlatNodeRef = world.createNode();
+        const reincarnatedNode: NodeHandle = world.createNode();
 
         expect(reincarnatedNode.id).toEqual(doomedNode.id);
         expect(reincarnatedNode.version).toEqual(doomedNode.version + 1);
@@ -118,9 +118,9 @@ describe('Accessor validation', () => {
 
     it('getLocalTransform rejects stale ref', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const doomedNode: FlatNodeRef = world.createNode();
+        const doomedNode: NodeHandle = world.createNode();
         world.destroy(doomedNode);
-        const reincarnatedNode: FlatNodeRef = world.createNode();
+        const reincarnatedNode: NodeHandle = world.createNode();
 
         expect(reincarnatedNode.id).toEqual(doomedNode.id);
         expect(reincarnatedNode.version).toEqual(doomedNode.version + 1);
@@ -130,45 +130,21 @@ describe('Accessor validation', () => {
 
     it('getWorldTransform rejects stale ref', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const doomedNode: FlatNodeRef = world.createNode();
+        const doomedNode: NodeHandle = world.createNode();
         world.destroy(doomedNode);
-        const reincarnatedNode: FlatNodeRef = world.createNode();
+        const reincarnatedNode: NodeHandle = world.createNode();
 
         expect(reincarnatedNode.id).toEqual(doomedNode.id);
         expect(reincarnatedNode.version).toEqual(doomedNode.version + 1);
 
         expect(() => world.getWorldTransform(doomedNode)).toThrow("Stale node reference");
     })
-
-    it('setLocalTransform rejects cross world ref', () => {
-        const world1: FlatWorld = new FlatWorld(10);
-        const world2: FlatWorld = new FlatWorld(10);
-        const node: FlatNodeRef = world1.createNode();
-
-        expect(() => world2.setLocalTransform(node, 10, 10, 10, 10)).toThrow("Node does not belong to this world");
-    })
-
-    it('getLocalTransform rejects cross world ref', () => {
-        const world1: FlatWorld = new FlatWorld(10);
-        const world2: FlatWorld = new FlatWorld(10);
-        const node: FlatNodeRef = world1.createNode();
-
-        expect(() => world2.getLocalTransform(node)).toThrow("Node does not belong to this world");
-    })
-
-    it('getWorldTransform rejects cross world ref', () => {
-        const world1: FlatWorld = new FlatWorld(10);
-        const world2: FlatWorld = new FlatWorld(10);
-        const node: FlatNodeRef = world1.createNode();
-
-        expect(() => world2.getWorldTransform(node)).toThrow("Node does not belong to this world");
-    })
 })
 
 describe('setLocalPosition convenience', () => {
     it('setLocalPosition sets tx, ty correctly', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const node: FlatNodeRef = world.createNode();
+        const node: NodeHandle = world.createNode();
 
         world.setLocalPosition(node, 10, 10);
 
@@ -177,7 +153,7 @@ describe('setLocalPosition convenience', () => {
 
     it('setLocalPosition does not modify a, b', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const node: FlatNodeRef = world.createNode();
+        const node: NodeHandle = world.createNode();
 
         world.setLocalTransform(node, 1, 1, 1, 1);
         world.setLocalPosition(node, 10, 10);
@@ -187,9 +163,9 @@ describe('setLocalPosition convenience', () => {
 
     it('setLocalTransform rejects stale ref', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const doomedNode: FlatNodeRef = world.createNode();
+        const doomedNode: NodeHandle = world.createNode();
         world.destroy(doomedNode);
-        const reincarnatedNode: FlatNodeRef = world.createNode();
+        const reincarnatedNode: NodeHandle = world.createNode();
 
         expect(reincarnatedNode.id).toEqual(doomedNode.id);
         expect(reincarnatedNode.version).toEqual(doomedNode.version + 1);

@@ -1,6 +1,6 @@
 import {FlatWorld} from "./FlatWorld";
 import {NULL} from "./constants";
-import {FlatNodeRef} from "./FlatNodeRef";
+import {NodeHandle} from "./types";
 
 export abstract class ComponentPool {
     private readonly nodeToComponent: Int32Array;
@@ -32,8 +32,8 @@ export abstract class ComponentPool {
 
     protected abstract swapComponentData(indexA: number, indexB: number): void;
 
-    add(ref: FlatNodeRef): number {
-        this._world.assertInWorld(ref);
+    add(ref: NodeHandle): number {
+        this._world.assertValidRef(ref);
 
         if (this.nodeToComponent[ref.id] !== NULL) {
             throw new Error("Node already has this component");
@@ -51,8 +51,8 @@ export abstract class ComponentPool {
         return compId;
     }
 
-    remove(ref: FlatNodeRef): void {
-        this._world.assertInWorld(ref);
+    remove(ref: NodeHandle): void {
+        this._world.assertValidRef(ref);
 
         if (this.nodeToComponent[ref.id] === NULL) {
             throw new Error("Node does not have this component");
@@ -61,14 +61,14 @@ export abstract class ComponentPool {
         this._removeByNodeId(ref.id);
     }
 
-    has(ref: FlatNodeRef): boolean {
-        this._world.assertInWorld(ref);
+    has(ref: NodeHandle): boolean {
+        this._world.assertValidRef(ref);
 
         return this.nodeToComponent[ref.id] !== NULL;
     }
 
-    get(ref: FlatNodeRef): number {
-        this._world.assertInWorld(ref);
+    get(ref: NodeHandle): number {
+        this._world.assertValidRef(ref);
 
         if (this.nodeToComponent[ref.id] === NULL) {
             throw new Error("Node does not have this component");
@@ -81,12 +81,10 @@ export abstract class ComponentPool {
         return this.nodeToComponent[nodeId];
     }
 
-    getNode(index: number): FlatNodeRef {
+    getNodeHandle(index: number): NodeHandle {
         const id: number = this.nodeIdAt(index); // verifies index
 
-        const ref: FlatNodeRef = new FlatNodeRef(this._world, id, this.componentToVersion[index]);
-
-        return ref;
+        return { id, version: this.componentToVersion[index] };
     }
 
     nodeIdAt(index: number): number {

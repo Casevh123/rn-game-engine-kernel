@@ -1,8 +1,7 @@
 import {ComponentPool} from "../ComponentPool";
 import {FlatWorld} from "../FlatWorld";
-import {System} from "../types";
+import {NodeHandle, System, refEquals} from "../types";
 import {NULL} from "../constants";
-import {FlatNodeRef} from "../FlatNodeRef";
 
 describe('movement proof (not official movement system, just example one)', () => {
     class PositionPool extends ComponentPool {
@@ -59,7 +58,7 @@ describe('movement proof (not official movement system, just example one)', () =
         const posPool: PositionPool = new PositionPool(world, 5);
         world.registerPool(velPool);
         world.registerPool(posPool);
-        const node: FlatNodeRef = world.createNode();
+        const node: NodeHandle = world.createNode();
         velPool.add(node);
         posPool.add(node);
         velPool.vx[velPool.get(node)] = 10;
@@ -81,7 +80,7 @@ describe('movement proof (not official movement system, just example one)', () =
         const posPool: PositionPool = new PositionPool(world, 5);
         world.registerPool(velPool);
         world.registerPool(posPool);
-        const node: FlatNodeRef = world.createNode();
+        const node: NodeHandle = world.createNode();
         velPool.add(node);
         posPool.add(node);
         velPool.vx[velPool.get(node)] = 10;
@@ -104,7 +103,7 @@ describe('movement proof (not official movement system, just example one)', () =
         const posPool: PositionPool = new PositionPool(world, 5);
         world.registerPool(velPool);
         world.registerPool(posPool);
-        const node: FlatNodeRef = world.createNode();
+        const node: NodeHandle = world.createNode();
         posPool.add(node);
         posPool.x[posPool.get(node)] = 0;
         posPool.y[posPool.get(node)] = 0;
@@ -123,7 +122,7 @@ describe('movement proof (not official movement system, just example one)', () =
         const posPool: PositionPool = new PositionPool(world, 5);
         world.registerPool(velPool);
         world.registerPool(posPool);
-        const node: FlatNodeRef = world.createNode();
+        const node: NodeHandle = world.createNode();
         velPool.add(node);
         velPool.vx[velPool.get(node)] = 10;
         velPool.vy[velPool.get(node)] = 5;
@@ -139,8 +138,8 @@ describe('movement proof (not official movement system, just example one)', () =
         const posPool: PositionPool = new PositionPool(world, 5);
         world.registerPool(velPool);
         world.registerPool(posPool);
-        const node1: FlatNodeRef = world.createNode();
-        const node2: FlatNodeRef = world.createNode();
+        const node1: NodeHandle = world.createNode();
+        const node2: NodeHandle = world.createNode();
         velPool.add(node1);
         posPool.add(node1);
         velPool.add(node2);
@@ -170,7 +169,7 @@ describe('movement proof (not official movement system, just example one)', () =
         const posPool: PositionPool = new PositionPool(world, 5);
         world.registerPool(velPool);
         world.registerPool(posPool);
-        const node: FlatNodeRef = world.createNode();
+        const node: NodeHandle = world.createNode();
         velPool.add(node);
         posPool.add(node);
         velPool.vx[velPool.get(node)] = 10;
@@ -181,7 +180,7 @@ describe('movement proof (not official movement system, just example one)', () =
         const destroySystem: System = (world: FlatWorld, dt: number) => {
             for (let i = 0; i < posPool.count; i++) {
                 if (posPool.x[i] >= 10 && posPool.y[i] >= 5) {
-                    world.commandBuffer.destroy(posPool.getNode(i));
+                    world.commandBuffer.destroy(posPool.getNodeHandle(i));
                 }
             }
         }
@@ -221,7 +220,7 @@ describe('transform end-to-end', () => {
     function createMovementSystem(velPool: VelocityPool): System {
         return (_world: FlatWorld, dt: number) => {
             for (let i: number = 0; i < velPool.count; i++) {
-                const node: FlatNodeRef = velPool.getNode(i);
+                const node: NodeHandle = velPool.getNodeHandle(i);
 
                 const currentTransform: { a: number, b: number, tx: number, ty: number } = _world.getLocalTransform(node);
                 _world.setLocalPosition(node, currentTransform.tx + velPool.vx[i] * dt, currentTransform.ty + velPool.vy[i] * dt);
@@ -231,8 +230,8 @@ describe('transform end-to-end', () => {
 
     it('Movement system + transform propagation', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const parent: FlatNodeRef = world.root;
-        const child: FlatNodeRef = world.createNode();
+        const parent: NodeHandle = world.root;
+        const child: NodeHandle = world.createNode();
         world.attach(child, parent);
         const velPool: VelocityPool = new VelocityPool(world, 5);
         world.registerPool(velPool);
@@ -262,8 +261,8 @@ describe('transform end-to-end', () => {
 
     it('Movement + propagation + deferred destroy', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const parent: FlatNodeRef = world.root;
-        const child: FlatNodeRef = world.createNode();
+        const parent: NodeHandle = world.root;
+        const child: NodeHandle = world.createNode();
         world.attach(child, parent);
         const velPool: VelocityPool = new VelocityPool(world, 5);
         world.registerPool(velPool);
@@ -295,9 +294,9 @@ describe('transform end-to-end', () => {
 
     it('Reparent during step + propagation on next step', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const parentA: FlatNodeRef = world.createNode();
-        const parentB: FlatNodeRef = world.createNode();
-        const child: FlatNodeRef = world.createNode();
+        const parentA: NodeHandle = world.createNode();
+        const parentB: NodeHandle = world.createNode();
+        const child: NodeHandle = world.createNode();
         world.attach(parentA, world.root);
         world.attach(parentB, world.root);
         world.attach(child, parentA)
@@ -312,7 +311,8 @@ describe('transform end-to-end', () => {
         const movementSystem: System = createMovementSystem(velPool);
         const propagationSystem: System = world.createTransformPropagationSystem();
         const reparentChild: System = (_world: FlatWorld, _: number) => {
-            if (_world.getParent(child)?.equals(parentA)) {
+            const parentHandle = _world.getParent(child);
+            if (parentHandle && refEquals(parentHandle, parentA)) {
                 _world.commandBuffer.reparent(child, parentB);
             }
         }
@@ -327,16 +327,16 @@ describe('transform end-to-end', () => {
         // Child has been reparented but the transform data is behind a frame
         childTransform = world.getWorldTransform(child);
         expect(childTransform).toEqual({ a: 1, b: 0, tx: 1, ty: 1 });
-        expect(world.getParent(child)?.equals(parentB)).toBe(true);
+        expect(refEquals(world.getParent(child)!, parentB)).toBe(true);
         expect(() => world.step(1)).not.toThrow();
         childTransform = world.getWorldTransform(child);
         expect(childTransform).toEqual({ a: 1, b: 0, tx: 4, ty: 4});
-        expect(world.getParent(child)?.equals(parentB)).toBe(true);
+        expect(refEquals(world.getParent(child)!, parentB)).toBe(true);
     })
 
     it('Disabled node re-enabled → next step propagates correctly', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const node: FlatNodeRef = world.createNode();
+        const node: NodeHandle = world.createNode();
         world.attach(node, world.root);
         const velPool: VelocityPool = new VelocityPool(world, 5);
         world.registerPool(velPool);

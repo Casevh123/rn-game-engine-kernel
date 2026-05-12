@@ -1,7 +1,6 @@
 import {FlatWorld} from "../FlatWorld";
 import {ComponentPool} from "../ComponentPool";
-import {FlatNodeRef} from "../FlatNodeRef";
-import {System} from "../types";
+import {NodeHandle, System} from "../types";
 
 describe('happy paths', () => {
     class TestPool extends ComponentPool {
@@ -27,7 +26,7 @@ describe('happy paths', () => {
 
     it('step runs a single registered system', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const node: FlatNodeRef = world.createNode();
+        const node: NodeHandle = world.createNode();
         const pool: TestPool = new TestPool(world, 5);
         world.registerPool(pool);
         const testSystem: System = (world: FlatWorld, dt: number): void => {
@@ -77,7 +76,7 @@ describe('happy paths', () => {
 
     it('step runs flush after all systems run', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const node: FlatNodeRef = world.createNode();
+        const node: NodeHandle = world.createNode();
         let failed: boolean = false;
         const system: System = (world: FlatWorld, dt: number): void => {
             world.commandBuffer.destroy(node);
@@ -98,7 +97,7 @@ describe('happy paths', () => {
 describe('command integration', () => {
     it('command enqueued during system is NOT visible during same system', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const node: FlatNodeRef = world.createNode();
+        const node: NodeHandle = world.createNode();
         let failed: boolean = false;
         const system: System = (world: FlatWorld, dt: number): void => {
             world.commandBuffer.destroy(node);
@@ -116,7 +115,7 @@ describe('command integration', () => {
 
     it('command enqueued by systemA is NOT visible during systemB', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const node: FlatNodeRef = world.createNode();
+        const node: NodeHandle = world.createNode();
         let failed: boolean = false;
         const systemA: System = (world: FlatWorld, dt: number): void => {
             world.commandBuffer.destroy(node);
@@ -136,8 +135,8 @@ describe('command integration', () => {
 
     it('flushes all commands from all systems', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const nodeA: FlatNodeRef = world.createNode();
-        const nodeB: FlatNodeRef = world.createNode();
+        const nodeA: NodeHandle = world.createNode();
+        const nodeB: NodeHandle = world.createNode();
         const systemA: System = (world: FlatWorld, dt: number): void => {
             world.commandBuffer.destroy(nodeA);
         }
@@ -169,7 +168,7 @@ describe('Error Cases', () => {
 
     it('System that throws does not leave world in corrupted state', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const node: FlatNodeRef = world.createNode();
+        const node: NodeHandle = world.createNode();
         let timesRan: number = 0;
         const system: System = (world: FlatWorld, dt: number): void => {
             if (timesRan === 0) {
@@ -193,7 +192,7 @@ describe('Error Cases', () => {
 
     it('Cannot attach during step', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const node: FlatNodeRef = world.createNode();
+        const node: NodeHandle = world.createNode();
         const system: System = (world: FlatWorld, dt: number): void => {
             world.attach(node, world.root);
         }
@@ -204,7 +203,7 @@ describe('Error Cases', () => {
 
     it('Cannot detach during step', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const node: FlatNodeRef = world.createNode();
+        const node: NodeHandle = world.createNode();
         world.attach(node, world.root);
         const system: System = (world: FlatWorld, dt: number): void => {
             world.detach(node);
@@ -216,7 +215,7 @@ describe('Error Cases', () => {
 
     it('Cannot destroy during step', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const node: FlatNodeRef = world.createNode();
+        const node: NodeHandle = world.createNode();
         const system: System = (world: FlatWorld, dt: number): void => {
             world.destroy(node);
         }
@@ -227,8 +226,8 @@ describe('Error Cases', () => {
 
     it('Cannot reparent during step', () => {
         const world: FlatWorld = new FlatWorld(10);
-        const nodeA: FlatNodeRef = world.createNode();
-        const nodeB: FlatNodeRef = world.createNode();
+        const nodeA: NodeHandle = world.createNode();
+        const nodeB: NodeHandle = world.createNode();
         world.attach(nodeA, world.root);
         world.attach(nodeB, world.root);
         const system: System = (world: FlatWorld, dt: number): void => {
