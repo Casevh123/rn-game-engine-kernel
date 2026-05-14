@@ -13,7 +13,7 @@
 An entity is an integer slot in a fixed-capacity memory pool. Slots are backed by parallel typed array columns (struct-of-arrays). Each slot carries:
 
 - **Structural links** (`Int32Array`): parent, firstChild, nextSibling, prevSibling
-- **Lifecycle state** (`Int32Array`): alive, enabled, version
+- **Lifecycle state** (`Int32Array`): alive, enabled, worldEnabled, version
 - **Allocator state** (`Int32Array`): freeNext (free-list linkage, closure-scoped)
 - **Local transform** (`Float32Array`): localA, localB, localTx, localTy
 - **World transform** (`Float32Array`): worldA, worldB, worldTx, worldTy
@@ -111,6 +111,7 @@ The entire kernel uses **closure-factory functions** instead of classes. Every m
 | `createFlatTreeStorage(capacity)` | `FlatTreeStorage` | TypedArrays, freeHead, allocator state |
 | `createCommandBuffer(world)` | `CommandBuffer` | command queue, world reference |
 | `createComponentPool(world, cap, swapFn)` | `ComponentPool` | mapping arrays, count, world reference, user swap callback |
+| `createSpritePool(world, capacity)` | `SpritePoolResult` | spriteType `Int32Array`, component pool |
 | `createFlatWorld(capacity)` | `FlatWorld` | storage, pools set, systems list, stepping flag |
 
 **Why factories instead of classes:** The kernel runs on a worklet runtime (`createWorkletRuntime`). Worklet serialization strips prototype chains — class methods become undefined on the receiving thread. Closure-factory POJOs serialize cleanly because their "methods" are own properties (function references), not inherited from a prototype.
@@ -137,6 +138,7 @@ This was proven empirically:
 12. Every node has a local and world transform. Both reset to identity on allocate and free.
 13. World transforms are computed by propagation, never written directly by user code.
 14. Disabled nodes and their subtrees are skipped by transform propagation. Their world transforms retain their last computed value.
+15. `worldEnabled[x] = 0` ⟺ `enabled[x] = 0 ∨ ∃ ancestor a of x : enabled[a] = 0`. Maintained by `setEnabled`, `attach`, `detach`, and `reparent`. Render collection checks `worldEnabled`, not `enabled`.
 
 ---
 
@@ -146,16 +148,16 @@ This was proven empirically:
 
 | Operation | Preconditions | Postconditions |
 |---|---|---|
-| `createNode()` | Free list non-empty | Slot popped, alive=1, enabled=1, version bumped, NodeHandle returned |
-| `destroy(ref)` | Valid ref, not root | Subtree destroyed depth-first. For each node: pools cleaned, slot freed, version bumped |
+| `createNode()` | Free list non-empty | Slot popped, alive=1, enabled=1, worldEnabled=1, version bumped, NodeHandle returned |
+| `destroy(ref)` | Valid ref, not root | Subtree destroyed depth-first. For each node: pools cleaned, slot freed (worldEnabled reset to 1), version bumped |
 
 ### Tree Mutations
 
 | Operation | Preconditions | Postconditions |
 |---|---|---|
-| `attach(child, parent)` | Both valid, child ≠ root, child parentless, child ≠ parent | Child head-inserted into parent's child list |
-| `detach(child)` | Valid, ≠ root, has parent | Child spliced from sibling list, parent cleared |
-| `reparent(node, newParent)` | Both valid, ≠ root, ≠ self, has parent, no cycle, ≠ current parent | Unlinked from old parent, head-inserted into new parent |
+| `attach(child, parent)` | Both valid, child ≠ root, child parentless, child ≠ parent | Child head-inserted into parent's child list. worldEnabled reconciled for attached subtree |
+| `detach(child)` | Valid, ≠ root, has parent | Child spliced from sibling list, parent cleared. If detached from worldDisabled parent, subtree worldEnabled restored |
+| `reparent(node, newParent)` | Both valid, ≠ root, ≠ self, has parent, no cycle, ≠ current parent | Unlinked from old parent, head-inserted into new parent. worldEnabled reconciled for moved subtree |
 
 ### Component Pool
 
@@ -196,6 +198,24 @@ This was proven empirically:
 | `setLocalPosition(ref, tx, ty)` | Valid ref | Only `localTx` and `localTy` updated; `localA` and `localB` unchanged |
 | `getWorldTransform(ref)` | Valid ref | Returns `{a, b, tx, ty}` |
 | `createTransformPropagationSystem()` | (none) | Returns a System that performs pre-order tree walk, composing world transforms from local transforms. Skips disabled subtrees |
+
+### Render Collection
+
+| Operation | Preconditions | Postconditions |
+|---|---|---|
+| `createRenderCollectionSystem(spritePool, spriteTypeData)` | spritePool registered with this world | Returns `{ system, buffer }`. System iterates SpritePool, gathers world transforms for worldEnabled sprites into pre-allocated RenderBuffer |
+
+The RenderBuffer is the kernel's output contract — parallel typed arrays sized to `spritePool.capacity`:
+
+```typescript
+interface RenderBuffer {
+    readonly transforms: Float32Array;  // [a₀,b₀,tx₀,ty₀, a₁,b₁,tx₁,ty₁, ...]
+    readonly spriteTypes: Int32Array;   // [type₀, type₁, ...]
+    count: number;                      // valid entries this frame
+}
+```
+
+The system performs a **gather operation**: it reads from two index spaces (SpritePool component indices for sprite type, scattered node IDs for world transforms) and writes them into the contiguous output buffer. No consumer ever sees a node ID. The buffer is pre-allocated at system creation time — zero per-frame heap allocations.
 
 ### Frame Loop
 
@@ -298,11 +318,35 @@ Transforms are storage columns (like `enabled`), not component pools (like Posit
 
 ### Engine Systems vs User Systems
 
-Transform propagation is an **engine-level system** — tightly coupled to storage internals, created via `world.createTransformPropagationSystem()`. User systems close over component pools and have no direct storage access.
+Transform propagation and render collection are **engine-level systems** — tightly coupled to storage internals, created via `world.createTransformPropagationSystem()` and `world.createRenderCollectionSystem()`. User systems close over component pools and have no direct storage access.
 
-**Why**: The propagation system reads structural arrays (`parent`, `firstChild`, `nextSibling`, `enabled`) and writes to transform columns. Exposing storage would let user code corrupt tree invariants. The factory method on the world grants scoped access via closure without exposing storage publicly.
+**Why**: Engine systems read structural arrays (`parent`, `firstChild`, `nextSibling`, `enabled`, `worldEnabled`) and write to transform columns or render buffers. Exposing storage would let user code corrupt tree invariants. Factory methods on the world grant scoped access via closure without exposing storage publicly.
 
-**Tradeoff**: Engine systems require a factory method on the world per system type. Acceptable — there are few engine systems (propagation, future render collection). User systems remain pure functions over pools.
+**Tradeoff**: Engine systems require a factory method on the world per system type. Acceptable — there are few engine systems (propagation, render collection). User systems remain pure functions over pools.
+
+### worldEnabled — Hierarchy-Aware Visibility
+
+Every node has two enabled flags: `enabled` (individual) and `worldEnabled` (effective). `worldEnabled` is maintained by `setEnabled`, `attach`, `detach`, and `reparent`.
+
+**Why**: Render collection iterates the SpritePool (flat, dense, cache-friendly). It cannot walk the tree to check ancestor enabled state — that would be O(h) per sprite. `worldEnabled` gives O(1) visibility checks during flat pool iteration by pre-computing hierarchy-dependent visibility at mutation time.
+
+**Invariant**: `worldEnabled[x] = 0` ⟺ `enabled[x] = 0 ∨ ∃ ancestor a : enabled[a] = 0`.
+
+**Tradeoff**: `setEnabled`, `attach`, `detach`, and `reparent` become O(subtree) instead of O(1). Acceptable — structural mutations are infrequent, render collection runs every frame.
+
+### Render Collection as Gather Operation
+
+The render collection system iterates the SpritePool densely, reads world transforms from scattered storage positions via node ID indirection, and writes them into a contiguous pre-allocated RenderBuffer.
+
+**Why**: Internal kernel layout is optimized for simulation (SoA, stable indices). The consumer (Skia bridge) needs contiguous data in a different layout (parallel RSXform and sprite type arrays). The gather operation bridges these two index spaces. The buffer is pre-allocated once — zero per-frame heap allocations, zero GC pressure.
+
+**Tradeoff**: One indirection per sprite (nodeIdAt → storage lookup). Acceptable — single array read, sequential output write.
+
+### SpritePool as ComponentPool Wrapper
+
+`createSpritePool(world, capacity)` wraps `createComponentPool` with a `spriteType: Int32Array` data column and a swap callback.
+
+**Why**: Establishes the pattern for future component types (AnimationPool, etc.) without adding generic machinery to ComponentPool. The pool manages index bookkeeping; the factory owns the typed data arrays.
 
 ### Deferred Structural Mutations
 

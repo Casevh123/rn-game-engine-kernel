@@ -22,6 +22,7 @@ export interface FlatTreeStorage {
     readonly prevSibling: Int32Array;
     readonly alive: Int32Array;
     readonly enabled: Int32Array;
+    readonly worldEnabled: Int32Array;
     readonly version: Int32Array;
     readonly localA: Float32Array;
     readonly localB: Float32Array;
@@ -72,6 +73,7 @@ export interface FlatWorld {
     createNode(): NodeHandle;
     assertValidRef(ref: NodeHandle): void;
     isEnabled(ref: NodeHandle): boolean;
+    isWorldEnabled(ref: NodeHandle): boolean;
     setEnabled(ref: NodeHandle, enabled: boolean): void;
     getParent(ref: NodeHandle): NodeHandle | null;
     getChildren(ref: NodeHandle): NodeHandle[];
@@ -84,10 +86,20 @@ export interface FlatWorld {
     addSystem(system: System): void;
     step(dt: number): void;
     createTransformPropagationSystem(): System;
+    createRenderCollectionSystem(
+        spritePool: ComponentPool,
+        spriteTypeData: Int32Array,
+    ): { system: System; buffer: RenderBuffer };
     setLocalTransform(ref: NodeHandle, a: number, b: number, tx: number, ty: number): void;
     getLocalTransform(ref: NodeHandle): { a: number; b: number; tx: number; ty: number };
     setLocalPosition(ref: NodeHandle, tx: number, ty: number): void;
     getWorldTransform(ref: NodeHandle): { a: number; b: number; tx: number; ty: number };
     /** @internal — for testing */
     getStorage(): FlatTreeStorage;
+}
+
+export interface RenderBuffer {
+    readonly transforms: Float32Array;  // [a₀,b₀,tx₀,ty₀, a₁,b₁,tx₁,ty₁, ...]
+    readonly spriteTypes: Int32Array; // [type₀, type₁, ...]
+    count: number;
 }

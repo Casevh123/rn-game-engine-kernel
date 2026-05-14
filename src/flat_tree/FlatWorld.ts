@@ -1,7 +1,7 @@
 import {createFlatTreeStorage} from "./FlatTreeStorage";
 import {NULL, ROOT_ID} from "./constants";
 import {createCommandBuffer} from "./CommandBuffer";
-import {NodeHandle, System, FlatWorld, ComponentPool, FlatTreeStorage} from "./types";
+import {NodeHandle, System, FlatWorld, ComponentPool, FlatTreeStorage, RenderBuffer} from "./types";
 
 export function createFlatWorld(capacity: number): FlatWorld {
     const storage: FlatTreeStorage = createFlatTreeStorage(capacity);
@@ -20,6 +20,7 @@ export function createFlatWorld(capacity: number): FlatWorld {
         createNode,
         assertValidRef,
         isEnabled,
+        isWorldEnabled,
         setEnabled,
         getParent,
         getChildren,
@@ -32,6 +33,7 @@ export function createFlatWorld(capacity: number): FlatWorld {
         addSystem,
         step,
         createTransformPropagationSystem,
+        createRenderCollectionSystem,
         setLocalTransform,
         getLocalTransform,
         setLocalPosition,
@@ -56,9 +58,71 @@ export function createFlatWorld(capacity: number): FlatWorld {
         return storage.enabled[ref.id] === 1;
     }
 
+    function isWorldEnabled(ref: NodeHandle): boolean {
+        assertValidRef(ref);
+        return storage.worldEnabled[ref.id] === 1;
+    }
+
+    // ─── worldEnabled propagation helpers ──────────────────────────────────
+
+    /**
+     * Walk subtree rooted at startId, setting worldEnabled = 0.
+     * Skips sub-subtrees already worldEnabled = 0 (invariant guarantees
+     * their descendants are also 0).
+     */
+    function _propagateWorldDisable(startId: number): void {
+        const stack: number[] = [startId];
+        while (stack.length > 0) {
+            const current: number = stack.pop()!;
+            if (storage.worldEnabled[current] === 0) continue;
+
+            storage.worldEnabled[current] = 0;
+            let childId: number = storage.firstChild[current];
+            while (childId !== NULL) {
+                stack.push(childId);
+                childId = storage.nextSibling[childId];
+            }
+        }
+    }
+
+    /**
+     * Walk subtree rooted at startId, setting worldEnabled = 1
+     * for nodes whose own enabled = 1. Stops descending into
+     * branches where enabled = 0 (individually disabled nodes
+     * and their descendants stay worldEnabled = 0).
+     */
+    function _propagateWorldEnable(startId: number): void {
+        const stack: number[] = [startId];
+        while (stack.length > 0) {
+            const current: number = stack.pop()!;
+            if (storage.enabled[current] === 0) continue;
+
+            storage.worldEnabled[current] = 1;
+            let childId: number = storage.firstChild[current];
+            while (childId !== NULL) {
+                stack.push(childId);
+                childId = storage.nextSibling[childId];
+            }
+        }
+    }
+
+    // ─── public API ────────────────────────────────────────────────────────
+
     function setEnabled(ref: NodeHandle, enabled: boolean) {
         assertValidRef(ref);
-        storage.enabled[ref.id] = enabled ? 1 : 0;
+
+        if (!enabled) {
+            storage.enabled[ref.id] = 0;
+            _propagateWorldDisable(ref.id);
+        } else {
+            storage.enabled[ref.id] = 1;
+
+            // If parent is worldDisabled, this node stays worldDisabled
+            const parentId: number = storage.parent[ref.id];
+            if (parentId !== NULL && storage.worldEnabled[parentId] === 0) return;
+
+            _propagateWorldEnable(ref.id);
+        }
     }
 
     function getParent(ref: NodeHandle): NodeHandle | null {
@@ -112,6 +176,13 @@ export function createFlatWorld(capacity: number): FlatWorld {
         if (oldFirst !== NULL) {
             storage.prevSibling[oldFirst] = child.id;
         }
+
+        // Reconcile worldEnabled for the attached subtree
+        if (storage.worldEnabled[parent.id] === 0) {
+            _propagateWorldDisable(child.id);
+        } else {
+            _propagateWorldEnable(child.id);
+        }
     }
 
     function detach(child: NodeHandle): void {
@@ -142,6 +213,11 @@ export function createFlatWorld(capacity: number): FlatWorld {
         storage.parent[child.id] = NULL;
         storage.prevSibling[child.id] = NULL;
         storage.nextSibling[child.id] = NULL;
+
+        // If detached from a disabled parent, re-enable subtree
+        if (storage.worldEnabled[parentId] === 0) {
+            _propagateWorldEnable(child.id);
+        }
     }
 
     function destroy(node: NodeHandle): void {
@@ -161,9 +237,9 @@ export function createFlatWorld(capacity: number): FlatWorld {
         const stack1: number[] = [id];
         const stack2: number[] = [];
         while (stack1.length > 0) {
-            const node: number = stack1.pop()!;
-            stack2.push(node);
-            let childId: number = storage.firstChild[node];
+            const current: number = stack1.pop()!;
+            stack2.push(current);
+            let childId: number = storage.firstChild[current];
             while (childId !== NULL) {
                 stack1.push(childId);
                 childId = storage.nextSibling[childId];
@@ -171,8 +247,8 @@ export function createFlatWorld(capacity: number): FlatWorld {
         }
 
         while (stack2.length > 0) {
-            const node: number = stack2.pop()!;
-            _destroyLeaf(node);
+            const current: number = stack2.pop()!;
+            _destroyLeaf(current);
         }
     }
 
@@ -254,6 +330,13 @@ export function createFlatWorld(capacity: number): FlatWorld {
         if (oldFirst !== NULL) {
             storage.prevSibling[oldFirst] = node.id;
         }
+
+        // Reconcile worldEnabled for the moved subtree
+        if (storage.worldEnabled[parent.id] === 0) {
+            _propagateWorldDisable(node.id);
+        } else if (storage.worldEnabled[node.id] === 0) {
+            _propagateWorldEnable(node.id);
+        }
     }
 
     function _isAncestor(possibleAncestorId: number, nodeId: number): boolean {
@@ -333,6 +416,45 @@ export function createFlatWorld(capacity: number): FlatWorld {
                 }
             }
         };
+    }
+
+    function createRenderCollectionSystem(
+        spritePool: ComponentPool,
+        spriteTypeData: Int32Array,
+    ): { system: System; buffer: RenderBuffer } {
+        // Pre-allocate once. Zero GC pressure.
+        const buffer: RenderBuffer = {
+            transforms: new Float32Array(spritePool.capacity * 4),
+            spriteTypes: new Int32Array(spritePool.capacity),
+            count: 0,
+        }
+
+        const s = storage // close over private storage
+
+        const system: System = (_world: FlatWorld, _dt: number): void => {
+            let writeIdx: number = 0;
+
+            for (let i: number = 0; i < spritePool.count; i++) {
+                const nodeId: number = spritePool.nodeIdAt(i);
+
+                // skip nodes that are effectively disabled
+                if (s.worldEnabled[nodeId] === 0) continue;
+
+                // Gather: read from scattered storage, write contigous
+                const base: number = writeIdx * 4;
+                buffer.transforms[base] = s.worldA[nodeId];
+                buffer.transforms[base + 1] = s.worldB[nodeId];
+                buffer.transforms[base + 2] = s.worldTx[nodeId];
+                buffer.transforms[base + 3] = s.worldTy[nodeId];
+                buffer.spriteTypes[writeIdx] = spriteTypeData[i];
+
+                writeIdx++;
+            }
+
+            buffer.count = writeIdx;
+        }
+
+        return {system, buffer}
     }
 
     function setLocalTransform(ref: NodeHandle, a: number, b: number, tx: number, ty: number): void {

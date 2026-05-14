@@ -12,6 +12,7 @@ export function createFlatTreeStorage(capacity: number): FlatTreeStorage {
     const prevSibling = new Int32Array(capacity);
     const alive = new Int32Array(capacity);
     const enabled = new Int32Array(capacity);
+    const worldEnabled = new Int32Array(capacity);
     const version = new Int32Array(capacity);
     const freeNext = new Int32Array(capacity);
     const localA = new Float32Array(capacity);
@@ -29,6 +30,7 @@ export function createFlatTreeStorage(capacity: number): FlatTreeStorage {
     prevSibling.fill(NULL);
     alive.fill(0);
     enabled.fill(1);
+    worldEnabled.fill(1);
     version.fill(0);
     freeNext.fill(NULL);
     localA.fill(1);
@@ -61,6 +63,7 @@ export function createFlatTreeStorage(capacity: number): FlatTreeStorage {
 
         alive[id] = 1;
         enabled[id] = 1;
+        worldEnabled[id] = 1;
         version[id]++;
 
         parent[id] = NULL;
@@ -85,6 +88,7 @@ export function createFlatTreeStorage(capacity: number): FlatTreeStorage {
 
         alive[id] = 0;
         enabled[id] = 1;
+        worldEnabled[id] = 1;
 
         parent[id] = NULL;
         firstChild[id] = NULL;
@@ -131,6 +135,7 @@ export function createFlatTreeStorage(capacity: number): FlatTreeStorage {
         prevSibling,
         alive,
         enabled,
+        worldEnabled,
         version,
         localA,
         localB,
