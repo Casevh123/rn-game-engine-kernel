@@ -15,6 +15,7 @@ import {
 import { createFlatWorld } from './engine/flat_tree/FlatWorld';
 import { createSpritePool } from './engine/flat_tree/SpritePool';
 import { FRAME_SIZE } from './sprites';
+import {scheduleOnRN} from "react-native-worklets";
 
 // ─── Configuration ─────────────────────────────────────────────────────────
 const ENGINE_ID = '__engine_v0';
@@ -25,6 +26,12 @@ const NUM_SPRITE_TYPES = 4;
 const PERF_SAMPLE_INTERVAL = 60; // frames between stat reports
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+
+// ─── Boundary Probe: TypedArray across worklet boundary ────────────────────
+// Plain arrays captured from JS scope → reconstructed as TypedArrays in worklet
+const _probeDataF32 = [1.5, 2.5, 3.5, 4.5];        // plain array (serializable)
+const _probeDataI32 = [10, 20, 30, 40];              // plain array (serializable)
+const _float32 = new Float32Array(_probeDataF32);
 
 // ─── Performance stats type ────────────────────────────────────────────────
 interface PerfStats {
@@ -76,6 +83,24 @@ export function GameScreen() {
 
         // ── Bootstrap engine (runs once) ──
         if (!g[ENGINE_ID] && initialized.value) {
+            // // ── Probe: test TypedArray reconstruction from captured plain arrays ──
+            const reconstructedF32 = new Float32Array(_probeDataF32);
+            const reconstructedI32 = new Int32Array(_probeDataI32);
+            const probeResult = {
+                // Did reconstruction work?
+                f32_isFloat32Array: reconstructedF32 instanceof Float32Array,
+                f32_length: reconstructedF32.length,
+                f32_values: [reconstructedF32[0], reconstructedF32[1], reconstructedF32[2], reconstructedF32[3]],
+                i32_isInt32Array: reconstructedI32 instanceof Int32Array,
+                i32_length: reconstructedI32.length,
+                i32_values: [reconstructedI32[0], reconstructedI32[1], reconstructedI32[2], reconstructedI32[3]],
+                // What did the captured plain arrays look like?
+                source_f32_isArray: Array.isArray(_probeDataF32),
+                source_i32_isArray: Array.isArray(_probeDataI32),
+            };
+            console.log('🔬 TypedArray Boundary Probe:', JSON.stringify(probeResult, null, 2));
+            console.log(_float32 instanceof Float32Array)
+
             const world = createFlatWorld(MAX_NODES);
             const { pool: spritePool, spriteType } = createSpritePool(world, MAX_SPRITES);
             world.registerPool(spritePool);
