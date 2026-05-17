@@ -1,86 +1,188 @@
 # React Native Game Engine
 
-A data-oriented 2D game engine kernel for React Native. Pure TypeScript — runs on a dedicated background thread via `createWorkletRuntime`, renders through react-native-skia.
+A data-oriented 2D game engine for React Native. Pure TypeScript kernel running on the UI worklet thread, rendering through Skia Atlas.
 
-## What this is
+## What This Is
 
-React's lifecycle is reactive. Games are imperative. This engine bridges that gap with a high-performance kernel that owns all simulation state on its own thread, while React serves as a declarative scene API and Skia handles GPU rendering.
+A high-performance game engine built for React Native from the ground up. Instead of fighting React's reactive model, the engine owns all simulation state on a dedicated worklet context while React serves as a scene declaration layer and Skia handles GPU rendering.
 
-The kernel is developed and tested in isolation — no React Native dependency. Its invariants are proven by 182 tests and hold regardless of runtime environment. The kernel IS the runtime, not a spec for a future port.
+**Three layers:**
+- **`@engine/kernel`** — The engine core. Pure TypeScript. SoA memory pools, closure-factory architecture, generational handles, deferred command buffer. Runs in any JS context. 203 tests.
+- **`@engine/react-native`** — The bridge. Connects the kernel to Skia rendering, gesture input, and the worklet lifecycle. Currently a skeleton with documented contracts.
+- **`apps/demo`** — A stress-test demo. Bouncing sprites with gravity and O(n²) collision at 60fps.
+
+## Monorepo Structure
+
+```
+react-native-game-engine/
+├── packages/
+│   ├── kernel/                 ← @engine/kernel
+│   │   ├── src/flat_tree/      ← core source + tests
+│   │   ├── SPEC.md             ← kernel specification
+│   │   ├── package.json
+│   │   └── jest.config.js
+│   └── react-native/           ← @engine/react-native
+│       ├── src/                ← plumbing source (skeleton)
+│       ├── SPEC.md             ← plumbing specification
+│       └── package.json
+├── apps/
+│   └── demo/                   ← Expo demo app
+│       ├── GameScreen.tsx      ← main game screen
+│       ├── app.json
+│       └── package.json
+├── docs/                       ← historical decision records
+│   ├── a3_audit_report.md      ← worklet compatibility audit
+│   └── runtime_target_change.md ← worker → UI thread decision
+├── plan.md                     ← project plan & roadmap
+├── GETTING_STARTED.md          ← how to build with this engine
+└── package.json                ← workspace root
+```
+
+## Packages
+
+### @engine/kernel
+
+The engine core. Zero React Native dependencies. Contains:
+
+- **SoA memory pool** — fixed-capacity TypedArray columns for all node data
+- **Scene graph** — rooted tree with O(1) attach/detach via doubly-linked sibling lists
+- **Generational handles** — `{id, version}` tuples preventing use-after-free
+- **Component pools** — dense swap-and-pop arrays with automatic cleanup
+- **Transforms** — RSXform layout (sCosθ, sSinθ, tx, ty), trig-free composition
+- **Command buffer** — deferred structural mutations, runtime-enforced
+- **Systems** — `(world, dt) → void` functions, sequential execution via `step(dt)`
+
+```bash
+# Run kernel tests
+npm test --workspace=packages/kernel
+```
+
+📄 [Kernel Specification](packages/kernel/SPEC.md)
+
+### @engine/react-native
+
+The React Native bridge layer. Connects the kernel to:
+
+- **Rendering** — Skia Atlas consumption of the kernel's RenderBuffer
+- **Input** — Gesture.Manual() → InputBuffer writes (planned)
+- **Lifecycle** — Engine bootstrap, frame loop, system registration
+
+Currently a skeleton. Reusable abstractions will be extracted from `apps/demo` as patterns stabilize.
+
+📄 [Plumbing Specification](packages/react-native/SPEC.md)
+
+## Demo
+
+The demo app is a stress-test for the engine. Bouncing sprites with gravity, wall bounce, and naive O(n²) collision. Includes a perf overlay and dynamic sprite count controls.
+
+```bash
+# Install all workspace dependencies
+npm install
+
+# Run the demo
+cd apps/demo
+npx expo run:ios
+```
 
 ## Architecture
 
-- **Closure-factory functions** — no classes, no prototypes. Every module is a factory returning a plain POJO. Fully serializable across worklet thread boundaries
-- **SoA memory pool** — fixed-capacity typed array columns for all node data
-- **Generational indices** — `(id, version)` handle tuples (`NodeHandle`) prevent use-after-free on slot reuse
-- **Doubly-linked sibling lists** — O(1) attach/detach
-- **Dense component pools** — swap-and-pop removal, one pool per component type, user-provided swap callback
-- **Transforms** — RSXform layout (sCosθ, sSinθ, tx, ty) per node, local + world. Trig-free composition via pre-order tree walk
-- **Systems** — `(world, dt) → void` functions that read/write pool data
-- **Command buffer** — deferred structural mutations, flushed after all systems run
-- **Frame loop** — `world.step(dt)` runs systems sequentially then flushes commands
-
-## Runtime Model
+### Runtime Model
 
 ```
-┌─────────────────────┐     ┌─────────────────────┐     ┌─────────────────────┐
-│   React (JS Thread) │     │  Kernel (Worklet     │     │  Skia (UI Thread)   │
-│                     │────▶│  Background Thread)  │────▶│                     │
-│  Scene declaration  │     │  world.step(dt)      │     │  <Atlas> + drawAtlas│
-│  User input events  │     │  SoA pools           │     │  useRSXformBuffer   │
-│  Command source     │     │  Transform propagate │     │  useFrameCallback   │
-└─────────────────────┘     └─────────────────────┘     └─────────────────────┘
+┌──────────────────────┐
+│   JS Thread (React)  │
+│  Scene declaration   │──── SharedValue / runOnJS ────┐
+│  State management    │                               │
+└──────────────────────┘                               │
+                                                       ▼
+┌─────────────────────────────────────────────────────────┐
+│                    UI Thread (Worklet)                   │
+│                                                         │
+│  ┌─────────────┐    ┌───────────────┐    ┌───────────┐ │
+│  │ Gesture     │───▶│ Engine Kernel │───▶│ Skia      │ │
+│  │ Callbacks   │    │ world.step()  │    │ <Atlas>   │ │
+│  │ (input)     │    │ SoA pools     │    │ drawAtlas │ │
+│  └─────────────┘    └───────────────┘    └───────────┘ │
+└─────────────────────────────────────────────────────────┘
 ```
 
-The kernel is the sole authority over simulation state. React is a projection (sends commands, never owns state). The renderer is a consumer (reads snapshots, never writes back).
+The kernel is the sole authority over simulation state. React is a projection — it sends commands but never owns entities. Skia is a consumer — it reads RenderBuffer snapshots but never writes back.
 
-## API
+### Closure-Factory Pattern
+
+No classes. No prototypes. Every module is a factory function returning a plain POJO. This is required by worklet serialization — prototype chains are stripped during transfer. Closure-captured state survives.
+
+## Quick Example
 
 ```typescript
+import { createFlatWorld, createSpritePool } from '@engine/kernel';
+
 // Create a world with capacity for 1024 nodes
 const world = createFlatWorld(1024);
 
-// Create nodes and build the tree
-const player = world.createNode();
-world.attach(player, world.root);
+// Create a sprite pool
+const { pool: spritePool, spriteType } = createSpritePool(world, 256);
+world.registerPool(spritePool);
 
-// Create a component pool with user-owned data
-const vx = new Float32Array(256);
-const vy = new Float32Array(256);
-const pool = createComponentPool(world, 256, (a, b) => {
-    let tmp = vx[a]; vx[a] = vx[b]; vx[b] = tmp;
-    tmp = vy[a]; vy[a] = vy[b]; vy[b] = tmp;
-});
-world.registerPool(pool);
+// Spawn a sprite
+const node = world.createNode();
+world.attach(node, world.root);
+const compIdx = spritePool.add(node);
+spriteType[compIdx] = 0; // sprite type index
+world.setLocalPosition(node, 100, 200);
 
-// Add a system
-world.addSystem((world, dt) => {
-    for (let i = 0; i < pool.count; i++) {
-        const handle = pool.getNodeHandle(i);
-        const t = world.getLocalTransform(handle);
-        world.setLocalPosition(handle, t.tx + vx[i] * dt, t.ty + vy[i] * dt);
-    }
-});
-
-// Add transform propagation
+// Add transform propagation + render collection
 world.addSystem(world.createTransformPropagationSystem());
+const { system, buffer } = world.createRenderCollectionSystem(spritePool, spriteType);
+world.addSystem(system);
 
-// Tick
+// Tick — systems run, RenderBuffer is populated
 world.step(1 / 60);
+
+// buffer.transforms, buffer.spriteTypes, buffer.count are ready for rendering
 ```
 
 ## Documentation
 
-- [`spec.md`](spec.md) — Abstract model, invariants, operation contracts, design decisions with rationale
-- [`plan.md`](plan.md) — Version roadmap (v0–v2), kernel work remaining, open architecture decisions
-- [`v0execution-todo.md`](v0execution-todo.md) — Ordered execution steps from current state to sprites on screen
-
-Tests are the executable spec. Docs capture what tests can't: the model, the invariants, and *why*.
+| Document | Description |
+|---|---|
+| [Kernel Specification](packages/kernel/SPEC.md) | Abstract model, invariants, operation contracts, design decisions |
+| [Plumbing Specification](packages/react-native/SPEC.md) | Runtime model, rendering pipeline, input pipeline, lifecycle |
+| [Plan](plan.md) | Current status, immediate next features, open decisions |
+| [Getting Started](GETTING_STARTED.md) | Step-by-step guide to building with this engine |
+| [A3 Audit Report](docs/a3_audit_report.md) | Worklet compatibility verification (historical) |
+| [Runtime Target Change](docs/runtime_target_change.md) | Worker → UI thread decision record (historical) |
 
 ## Status
 
-**Phase A complete.** The kernel is fully worklet-compatible — 182 tests pass in Jest, and the complete factory chain (createFlatWorld → createFlatTreeStorage → createCommandBuffer → createComponentPool) has been verified on a dedicated worklet runtime via `createWorkletRuntime` (A3 audit: 18/18 checks passed). Next: Phase B (rendering consumption model).
+**Engine core: feature-complete for v0.** All kernel systems are built, tested, and verified on-device. The demo runs 500+ sprites at 60fps with gravity and collision.
 
+**Next:** Input system and sprite pivot correction. See [plan.md](plan.md) for details.
+
+## Development
+
+```bash
+# Clone and install
+git clone <repo-url>
+cd react-native-game-engine
+npm install
+
+# Run kernel tests
+npm test --workspace=packages/kernel
+
+# Run the demo app
+cd apps/demo
+npx expo run:ios
+
+# Add a new package
+mkdir packages/my-package
+# Add to root package.json workspaces if needed (packages/* is already included)
 ```
-npm test
+
+### Workspace Commands
+
+```bash
+npm test --workspace=packages/kernel     # run kernel tests
+npm install --workspace=apps/demo        # install demo-specific deps
+npm install                              # install everything from root
 ```

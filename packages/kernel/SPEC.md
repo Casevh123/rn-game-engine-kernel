@@ -1,8 +1,8 @@
-# Engine Specification
+# Kernel Specification
 
 > The abstract model for a data-oriented game engine kernel. Tests are the executable spec. This document captures what tests cannot: the model, the invariants, and why decisions were made.
 >
-> This spec describes the kernel that runs on a dedicated worklet thread via `createWorkletRuntime` (react-native-reanimated). The invariants defined here are runtime-agnostic — they hold in tests, in a worklet, or in any future backend. Cross-thread boundaries (kernel ↔ renderer, kernel ↔ React) are documented in [`plan.md`](plan.md).
+> The invariants defined here are runtime-agnostic — they hold in tests, on a worklet thread, or in any future backend. Runtime-specific concerns (rendering, input, React integration) are documented in [`packages/react-native/SPEC.md`](../react-native/SPEC.md).
 
 ---
 
@@ -114,9 +114,9 @@ The entire kernel uses **closure-factory functions** instead of classes. Every m
 | `createSpritePool(world, capacity)` | `SpritePoolResult` | spriteType `Int32Array`, component pool |
 | `createFlatWorld(capacity)` | `FlatWorld` | storage, pools set, systems list, stepping flag |
 
-**Why factories instead of classes:** The kernel runs on a worklet runtime (`createWorkletRuntime`). Worklet serialization strips prototype chains — class methods become undefined on the receiving thread. Closure-factory POJOs serialize cleanly because their "methods" are own properties (function references), not inherited from a prototype.
+**Why factories instead of classes:** The kernel runs inside worklet contexts (react-native-reanimated). Worklet serialization strips prototype chains — class methods become undefined on the receiving thread. Closure-factory POJOs serialize cleanly because their "methods" are own properties (function references), not inherited from a prototype.
 
-This was proven empirically:
+This was proven empirically (see [A3 audit report](../../docs/a3_audit_report.md)):
 - **A2 audit**: Classes fail — methods stripped during serialization
 - **A3 audit**: Factory POJOs pass — 18/18 checks on worklet runtime
 
@@ -232,7 +232,7 @@ The system performs a **gather operation**: it reads from two index spaces (Spri
 
 All kernel modules are closure-factory functions returning plain POJOs. No classes, no prototypes.
 
-**Why**: The kernel runs on a worklet thread via `createWorkletRuntime`. Worklet serialization transfers function bodies and closure captures across thread boundaries but strips prototype chains — class methods become `undefined`. Factory POJOs with methods as own properties survive serialization intact. Verified empirically: A2 (classes fail) → A3 (factories pass, 18/18).
+**Why**: The kernel runs inside worklet contexts (react-native-reanimated). Worklet serialization strips prototype chains — class methods become `undefined`. Factory POJOs with methods as own properties survive serialization intact. Verified empirically: A2 (classes fail) → A3 (factories pass, 18/18).
 
 **Tradeoff**: No `instanceof` checks. Pool `belongsTo(world)` uses reference equality instead. Slightly more verbose factory signatures (e.g., `swapFn` callback replaces abstract method override).
 

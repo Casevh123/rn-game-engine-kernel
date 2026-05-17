@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@engine/kernel": "*",
+    "@engine/react-native": "*",
     "@shopify/react-native-skia": "2.2.12",
     "expo": "~54.0.33",
     "expo-status-bar": "~3.0.9",
