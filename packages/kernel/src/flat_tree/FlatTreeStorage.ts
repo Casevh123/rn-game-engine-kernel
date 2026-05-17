@@ -2,6 +2,7 @@ import {NULL, ROOT_ID} from "./constants";
 import {FlatTreeStorage} from "./types";
 
 export function createFlatTreeStorage(capacity: number): FlatTreeStorage {
+    'worklet';
     if (capacity < 1) {
         throw new Error("Capacity must be at least 1");
     }

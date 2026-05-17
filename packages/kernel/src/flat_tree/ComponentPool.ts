@@ -15,6 +15,7 @@ export function createComponentPool(
     poolCapacity: number,
     swapComponentData: (indexA: number, indexB: number) => void,
 ): ComponentPool {
+    'worklet';
     const nodeToComponent = new Int32Array(world.capacity);
     const componentToNode = new Int32Array(poolCapacity);
     const componentToVersion = new Int32Array(poolCapacity);

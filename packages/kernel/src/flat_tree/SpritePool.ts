@@ -7,6 +7,7 @@ export interface SpritePoolResult {
 }
 
 export function createSpritePool(world: FlatWorld, capacity: number): SpritePoolResult {
+    'worklet';
     const spriteType = new Int32Array(capacity);
 
     const pool = createComponentPool(world, capacity, (a: number, b: number): void => {

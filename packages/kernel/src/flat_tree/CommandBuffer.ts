@@ -1,6 +1,7 @@
 import {NodeHandle, CommandBuffer, FlatWorld} from "./types";
 
 export function createCommandBuffer(world: FlatWorld): CommandBuffer {
+    'worklet';
     let queue: Array<() => void> = [];
 
     return {
