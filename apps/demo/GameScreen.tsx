@@ -12,8 +12,7 @@ import {
     useFrameCallback,
     runOnJS,
 } from 'react-native-reanimated';
-import { createFlatWorld } from './engine/flat_tree/FlatWorld';
-import { createSpritePool } from './engine/flat_tree/SpritePool';
+import { createFlatWorld, createSpritePool } from '@engine/kernel';
 import { FRAME_SIZE } from './sprites';
 import {scheduleOnRN} from "react-native-worklets";
 
