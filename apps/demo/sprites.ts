@@ -1,3 +1,5 @@
+import { SpriteAtlasLookup } from '@engine/kernel';
+
 /**
  * Sprite source rectangle definitions for the spritesheet.
  *
@@ -26,4 +28,22 @@ export function getSpriteRect(typeIndex: number): { x: number; y: number; w: num
         w: FRAME_SIZE,
         h: FRAME_SIZE,
     };
+}
+
+export function createSpriteAtlasLookup(): SpriteAtlasLookup {
+    'worklet';
+    const res = {
+        widths: new Float32Array(SPRITE_COUNT_TYPES),
+        heights: new Float32Array(SPRITE_COUNT_TYPES),
+        pivotXs: new Float32Array(SPRITE_COUNT_TYPES).fill(0.5),
+        pivotYs: new Float32Array(SPRITE_COUNT_TYPES).fill(0.5),
+    }
+
+    for (let i: number = 0; i < SPRITE_COUNT_TYPES; i++) {
+        const { w, h } = getSpriteRect(i);
+        res.widths[i] = w;
+        res.heights[i] = h;
+    }
+
+    return res;
 }

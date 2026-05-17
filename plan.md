@@ -60,6 +60,7 @@ The kernel runs on the **UI worklet thread** — the default worklet runtime pro
 | Transform propagation system | ✅ Complete | `packages/kernel/` |
 | SpritePool (ComponentPool wrapper) | ✅ Complete | `packages/kernel/` |
 | Render collection system (gather operation) | ✅ Complete | `packages/kernel/` |
+| Sprite atlas awareness + pivot correction | ✅ Complete | `packages/kernel/` |
 | Worklet compatibility ('worklet' directives) | ✅ Verified | `packages/kernel/` |
 | Demo: Skia Atlas rendering | ✅ Working | `apps/demo/` |
 | Demo: gravity + O(n²) collision | ✅ Working | `apps/demo/` |
@@ -69,15 +70,13 @@ The kernel runs on the **UI worklet thread** — the default worklet runtime pro
 ### What's Proven
 
 - Kernel factories instantiate and tick correctly in worklet context (A3 audit: 18/18)
-- 203 kernel tests pass in Jest (worklet directives are no-ops)
+- 209 kernel tests pass in Jest (worklet directives are no-ops)
 - 500 sprites at 60fps with gravity + collision on iPhone hardware
 - Workspace dependency resolution works with Reanimated babel plugin
 
 ---
 
 ## Immediate Next
-
-The next two features to implement, in order.
 
 ### 1. Input System
 
@@ -93,17 +92,6 @@ The next two features to implement, in order.
 - Same-thread, synchronous, zero-latency
 
 **Design:** Settled. See [input system architecture](packages/react-native/SPEC.md#input-pipeline-planned) for the full contract.
-
-### 2. Sprite Pivot Correction
-
-**Goal:** Sprites render centered at their world position instead of from the top-left corner.
-
-**What's needed:**
-- `SpriteAtlasLookup` — TypedArray-backed map from sprite type to `{ width, height, pivotX, pivotY }`
-- Pivot offset applied during render collection (kernel-side, in the gather operation)
-- Atlas metadata passed from JS side to worklet thread
-
-**Why this matters:** Without pivot correction, sprites at position (100, 100) have their top-left corner at that point. With correction, their center (or custom pivot) is at that point. This is fundamental for collision, input hit-testing, and visual accuracy.
 
 ---
 

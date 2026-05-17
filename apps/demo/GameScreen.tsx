@@ -12,9 +12,8 @@ import {
     useFrameCallback,
     runOnJS,
 } from 'react-native-reanimated';
-import { createFlatWorld, createSpritePool } from '@engine/kernel';
-import { FRAME_SIZE } from './sprites';
-import {scheduleOnRN} from "react-native-worklets";
+import {createFlatWorld, createSpritePool, SpriteAtlasLookup} from '@engine/kernel';
+import {createSpriteAtlasLookup, FRAME_SIZE} from './sprites';
 
 // ─── Configuration ─────────────────────────────────────────────────────────
 const ENGINE_ID = '__engine_v0';
@@ -182,8 +181,9 @@ export function GameScreen() {
             world.addSystem(writeBackSystem);
             world.addSystem(world.createTransformPropagationSystem());
 
+            const atlas: SpriteAtlasLookup = createSpriteAtlasLookup();
             const { system: renderSystem, buffer } =
-                world.createRenderCollectionSystem(spritePool, spriteType);
+                world.createRenderCollectionSystem(spritePool, spriteType, atlas);
             world.addSystem(renderSystem);
 
             // Spawn initial sprites

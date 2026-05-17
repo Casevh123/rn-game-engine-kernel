@@ -90,6 +90,7 @@ export interface FlatWorld {
     createRenderCollectionSystem(
         spritePool: ComponentPool,
         spriteTypeData: Int32Array,
+        atlasLookup: SpriteAtlasLookup,
     ): { system: System; buffer: RenderBuffer };
     setLocalTransform(ref: NodeHandle, a: number, b: number, tx: number, ty: number): void;
     getLocalTransform(ref: NodeHandle): { a: number; b: number; tx: number; ty: number };
@@ -103,4 +104,18 @@ export interface RenderBuffer {
     readonly transforms: Float32Array;  // [a₀,b₀,tx₀,ty₀, a₁,b₁,tx₁,ty₁, ...]
     readonly spriteTypes: Int32Array; // [type₀, type₁, ...]
     count: number;
+}
+
+/**
+ * Immutable lookup tables mapping sprite type ID -> sprite metadata.
+ * All arrays are indexed by sprite type ID. Built once from atlas JSON,
+ * never mutated at runtime.
+ *
+ * Pivot is normalized (0-1). (0.5, 0.5) = center. (0,0) = top-left.
+ */
+export interface SpriteAtlasLookup {
+    readonly widths: Float32Array;
+    readonly heights: Float32Array;
+    readonly pivotXs: Float32Array;
+    readonly pivotYs: Float32Array;
 }

@@ -203,7 +203,7 @@ This was proven empirically (see [A3 audit report](../../docs/a3_audit_report.md
 
 | Operation | Preconditions | Postconditions |
 |---|---|---|
-| `createRenderCollectionSystem(spritePool, spriteTypeData)` | spritePool registered with this world | Returns `{ system, buffer }`. System iterates SpritePool, gathers world transforms for worldEnabled sprites into pre-allocated RenderBuffer |
+| `createRenderCollectionSystem(spritePool, spriteTypeData, atlasLookup)` | spritePool registered with this world | Returns `{ system, buffer }`. System iterates SpritePool, gathers **pivot-corrected** transforms for worldEnabled sprites into pre-allocated RenderBuffer |
 
 The RenderBuffer is the kernel's output contract — parallel typed arrays sized to `spritePool.capacity`:
 
@@ -215,7 +215,33 @@ interface RenderBuffer {
 }
 ```
 
-The system performs a **gather operation**: it reads from two index spaces (SpritePool component indices for sprite type, scattered node IDs for world transforms) and writes them into the contiguous output buffer. No consumer ever sees a node ID. The buffer is pre-allocated at system creation time — zero per-frame heap allocations.
+The `transforms` array contains **pivot-corrected RSXform values**, not raw world transforms. The `a` and `b` components are the world rotation/scale (unchanged). The `tx` and `ty` components are adjusted so that the sprite's pivot point (not its top-left corner) aligns with the entity's world position:
+
+```
+tx = worldTx − a · (pivotX · width) + b · (pivotY · height)
+ty = worldTy − b · (pivotX · width) − a · (pivotY · height)
+```
+
+This is a matrix composition: the world transform pre-multiplied by a pivot-to-origin translation. Rotation mixes both dimensions into both axes — the correction lives in the sprite's rotated local space, not screen space.
+
+The `SpriteAtlasLookup` provides the sprite metadata needed for pivot correction:
+
+```typescript
+interface SpriteAtlasLookup {
+    readonly widths: Float32Array;    // pixel width per sprite type
+    readonly heights: Float32Array;   // pixel height per sprite type
+    readonly pivotXs: Float32Array;   // normalized 0-1 pivot x per sprite type
+    readonly pivotYs: Float32Array;   // normalized 0-1 pivot y per sprite type
+}
+```
+
+All arrays are indexed by sprite type ID. The lookup is immutable after construction — built once from atlas metadata, never mutated at runtime. It is injected into the render collection system as a parameter (not owned by the world).
+
+The system performs a **gather operation** across three index spaces, chained:
+1. Component index `i` → node ID (via `spritePool.nodeIdAt(i)`) → world transforms from storage
+2. Component index `i` → sprite type ID (via `spriteTypeData[i]`) → dimensions and pivot from atlas lookup
+
+No consumer ever sees a node ID. The buffer is pre-allocated at system creation time — zero per-frame heap allocations.
 
 ### Frame Loop
 
@@ -341,6 +367,14 @@ The render collection system iterates the SpritePool densely, reads world transf
 **Why**: Internal kernel layout is optimized for simulation (SoA, stable indices). The consumer (Skia bridge) needs contiguous data in a different layout (parallel RSXform and sprite type arrays). The gather operation bridges these two index spaces. The buffer is pre-allocated once — zero per-frame heap allocations, zero GC pressure.
 
 **Tradeoff**: One indirection per sprite (nodeIdAt → storage lookup). Acceptable — single array read, sequential output write.
+
+### Pivot Correction at Output Boundary
+
+Pivot correction is applied during render collection (the gather operation), not in physics, not at the consumer.
+
+**Why**: Entity positions represent the logical center of the entity — the point that physics, collision, and input operate on. The rendering backend (Skia Atlas) places sprites with their top-left corner at the RSXform's `(tx, ty)`. This mismatch must be resolved somewhere. Resolving it at the output boundary keeps both sides clean: physics never sees pixel dimensions, consumers never compute corrections. The atlas lookup is injected configuration — the kernel doesn't know what a spritesheet is, it just applies the correction formula during gather.
+
+**Tradeoff**: Two extra multiplies and four extra adds per sprite per frame (pivot × dimension, then rotation-aware offset). Negligible — same order as the existing transform gather.
 
 ### SpritePool as ComponentPool Wrapper
 

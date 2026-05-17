@@ -1,7 +1,7 @@
 import {createFlatTreeStorage} from "./FlatTreeStorage";
 import {NULL, ROOT_ID} from "./constants";
 import {createCommandBuffer} from "./CommandBuffer";
-import {NodeHandle, System, FlatWorld, ComponentPool, FlatTreeStorage, RenderBuffer} from "./types";
+import {NodeHandle, System, FlatWorld, ComponentPool, FlatTreeStorage, RenderBuffer, SpriteAtlasLookup} from "./types";
 
 export function createFlatWorld(capacity: number): FlatWorld {
     'worklet';
@@ -423,8 +423,8 @@ export function createFlatWorld(capacity: number): FlatWorld {
     function createRenderCollectionSystem(
         spritePool: ComponentPool,
         spriteTypeData: Int32Array,
+        atlasLookup: SpriteAtlasLookup,
     ): { system: System; buffer: RenderBuffer } {
-        // Pre-allocate once. Zero GC pressure.
         const buffer: RenderBuffer = {
             transforms: new Float32Array(spritePool.capacity * 4),
             spriteTypes: new Int32Array(spritePool.capacity),
@@ -443,13 +443,20 @@ export function createFlatWorld(capacity: number): FlatWorld {
                 // skip nodes that are effectively disabled
                 if (s.worldEnabled[nodeId] === 0) continue;
 
+                const typeId: number = spriteTypeData[i];
+                const pw: number = atlasLookup.pivotXs[typeId] * atlasLookup.widths[typeId];
+                const ph: number = atlasLookup.pivotYs[typeId] * atlasLookup.heights[typeId];
+
+                const a: number = s.worldA[nodeId];
+                const b: number = s.worldB[nodeId];
+
                 // Gather: read from scattered storage, write contigous
                 const base: number = writeIdx * 4;
-                buffer.transforms[base] = s.worldA[nodeId];
-                buffer.transforms[base + 1] = s.worldB[nodeId];
-                buffer.transforms[base + 2] = s.worldTx[nodeId];
-                buffer.transforms[base + 3] = s.worldTy[nodeId];
-                buffer.spriteTypes[writeIdx] = spriteTypeData[i];
+                buffer.transforms[base] = a;
+                buffer.transforms[base + 1] = b;
+                buffer.transforms[base + 2] = s.worldTx[nodeId] - a * pw + b * ph;
+                buffer.transforms[base + 3] = s.worldTy[nodeId] - b * pw - a * ph;
+                buffer.spriteTypes[writeIdx] = typeId;
 
                 writeIdx++;
             }
