@@ -10,6 +10,7 @@ export function createFlatWorld(capacity: number): FlatWorld {
     const pools: Set<ComponentPool> = new Set();
     const systems: System[] = [];
     let stepping: boolean = false;
+    let time: number = 0;
 
     // We need a forward reference because commandBuffer captures `world`,
     // and `world` is what we return. We build the world object first, then
@@ -32,6 +33,7 @@ export function createFlatWorld(capacity: number): FlatWorld {
         reparent,
         registerPool,
         addSystem,
+        getTime,
         step,
         createTransformPropagationSystem,
         createRenderCollectionSystem,
@@ -359,6 +361,10 @@ export function createFlatWorld(capacity: number): FlatWorld {
         systems.push(system);
     }
 
+    function getTime(): number {
+        return time;
+    }
+
     function step(dt: number): void {
         if (stepping) {
             throw new Error("Cannot call step() during step()");
@@ -375,6 +381,7 @@ export function createFlatWorld(capacity: number): FlatWorld {
             stepping = false;
         }
 
+        time = time + dt;
         world.commandBuffer.flush();
     }
 

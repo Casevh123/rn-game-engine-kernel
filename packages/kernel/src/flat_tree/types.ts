@@ -86,6 +86,7 @@ export interface FlatWorld {
     registerPool(pool: ComponentPool): void;
     addSystem(system: System): void;
     step(dt: number): void;
+    getTime(): number;
     createTransformPropagationSystem(): System;
     createRenderCollectionSystem(
         spritePool: ComponentPool,
@@ -118,4 +119,21 @@ export interface SpriteAtlasLookup {
     readonly heights: Float32Array;
     readonly pivotXs: Float32Array;
     readonly pivotYs: Float32Array;
+}
+
+export interface InputBuffer {
+    readonly touchX:     Float32Array;   // [MAX_TOUCHES]
+    readonly touchY:     Float32Array;   // [MAX_TOUCHES]
+    readonly touchPhase: Int32Array;     // [MAX_TOUCHES]
+    readonly touchId:    Int32Array;     // [MAX_TOUCHES]
+    activeTouchCount:    number;
+}
+
+export interface TouchHistory {
+    readonly startX:    Float32Array;  // position when BEGAN
+    readonly startY:    Float32Array;
+    readonly startTime: Float32Array;  // world time when BEGAN (seconds)
+    readonly prevX:     Float32Array;  // position last frame
+    readonly prevY:     Float32Array;
+    readonly duration:  Float32Array;  // accumulated active time
 }
