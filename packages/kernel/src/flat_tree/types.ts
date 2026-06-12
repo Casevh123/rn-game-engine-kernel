@@ -121,19 +121,31 @@ export interface SpriteAtlasLookup {
     readonly pivotYs: Float32Array;
 }
 
-export interface InputBuffer {
-    readonly touchX:     Float32Array;   // [MAX_TOUCHES]
-    readonly touchY:     Float32Array;   // [MAX_TOUCHES]
-    readonly touchPhase: Int32Array;     // [MAX_TOUCHES]
-    readonly touchId:    Int32Array;     // [MAX_TOUCHES]
-    activeTouchCount:    number;
+export interface TouchEventBuffer {
+    readonly touchX:             Float32Array;   // [MAX_TOUCHES]
+    readonly touchY:             Float32Array;   // [MAX_TOUCHES]
+    readonly beginX:             Float32Array;   // [MAX_TOCHES]
+    readonly beginY:             Float32Array;   // [MAX_TOUCHES]
+    readonly beganThisFrame:     Uint8Array;     // [MAX_TOUCHES] boolean
+    readonly movedThisFrame:     Uint8Array;     // [MAX_TOUCHES] boolean
+    readonly endedThisFrame:     Uint8Array;     // [MAX_TOUCHES] boolean
+    readonly canceledThisFrame:  Uint8Array;     // [MAX_TOUCHES] boolean
+    readonly touchId:            Int32Array;     // [MAX_TOUCHES]
 }
 
-export interface TouchHistory {
-    readonly startX:    Float32Array;  // position when BEGAN
-    readonly startY:    Float32Array;
-    readonly startTime: Float32Array;  // world time when BEGAN (seconds)
-    readonly prevX:     Float32Array;  // position last frame
-    readonly prevY:     Float32Array;
-    readonly duration:  Float32Array;  // accumulated active time
+export interface TouchState {
+    readonly touchX:       Float32Array;   // [MAX_TOUCHES]
+    readonly touchY:       Float32Array;   // [MAX_TOUCHES]
+    readonly startX:       Float32Array;  // position when BEGAN
+    readonly startY:       Float32Array;
+    readonly startTime:    Float32Array;  // world time when BEGAN (seconds)
+    readonly prevX:        Float32Array;  // position last frame
+    readonly prevY:        Float32Array;
+    readonly beganThisFrame:     Uint8Array;     // [MAX_TOUCHES] boolean
+    readonly movedThisFrame:     Uint8Array;     // [MAX_TOUCHES] boolean
+    readonly endedThisFrame:     Uint8Array;     // [MAX_TOUCHES] boolean
+    readonly canceledThisFrame:  Uint8Array;     // [MAX_TOUCHES] boolean
+    readonly touchVisible:            Uint8Array;     // [MAX_TOUCHES]
+
+    visibleTouchCount:   number;
 }
