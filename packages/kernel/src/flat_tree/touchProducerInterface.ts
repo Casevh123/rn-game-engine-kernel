@@ -1,7 +1,7 @@
 import {TouchEventBuffer} from "./types";
 import {MAX_TOUCHES} from "./constants";
 
-export function writeTouchesDown(buffer: TouchEventBuffer, id: number, x: number, y: number) {
+export function writeTouchDown(buffer: TouchEventBuffer, id: number, x: number, y: number) {
     // find first open slot
     let i: number = 0;
     for (;i < MAX_TOUCHES; i++) {
@@ -22,7 +22,7 @@ export function writeTouchesDown(buffer: TouchEventBuffer, id: number, x: number
     buffer.touchId[i] = id;
 }
 
-export function writeTouchesMove(buffer: TouchEventBuffer, id: number, x: number, y: number) {
+export function writeTouchMove(buffer: TouchEventBuffer, id: number, x: number, y: number) {
     const i: number = findInBuffer(buffer, id);
 
     if (i === -1) {
@@ -34,7 +34,7 @@ export function writeTouchesMove(buffer: TouchEventBuffer, id: number, x: number
     buffer.movedThisFrame[i] = 1;
 }
 
-export function writeTouchesUp(buffer: TouchEventBuffer, id: number, x: number, y: number) {
+export function writeTouchUp(buffer: TouchEventBuffer, id: number, x: number, y: number) {
     const i: number = findInBuffer(buffer, id);
 
     if (i === -1) {
@@ -46,7 +46,7 @@ export function writeTouchesUp(buffer: TouchEventBuffer, id: number, x: number, 
     buffer.endedThisFrame[i] = 1;
 }
 
-export function writeTouchesCancelled(buffer: TouchEventBuffer, id: number) {
+export function writeTouchCancel(buffer: TouchEventBuffer, id: number) {
     const i: number = findInBuffer(buffer, id);
 
     if (i === -1) {
