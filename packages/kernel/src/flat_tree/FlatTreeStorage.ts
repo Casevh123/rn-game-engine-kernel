@@ -31,7 +31,7 @@ export function createFlatTreeStorage(capacity: number): FlatTreeStorage {
     prevSibling.fill(NULL);
     alive.fill(0);
     enabled.fill(1);
-    worldEnabled.fill(1);
+    worldEnabled.fill(0);
     version.fill(0);
     freeNext.fill(NULL);
     localA.fill(1);
@@ -45,6 +45,7 @@ export function createFlatTreeStorage(capacity: number): FlatTreeStorage {
 
     alive[ROOT_ID] = 1;
     version[ROOT_ID] = 1;
+    worldEnabled[ROOT_ID] = 1;
 
     let freeHead: number = capacity > 1 ? 1 : NULL;
 
@@ -64,7 +65,7 @@ export function createFlatTreeStorage(capacity: number): FlatTreeStorage {
 
         alive[id] = 1;
         enabled[id] = 1;
-        worldEnabled[id] = 1;
+        worldEnabled[id] = 0;
         version[id]++;
 
         parent[id] = NULL;

@@ -114,6 +114,15 @@ export function createFlatWorld(capacity: number): FlatWorld {
     function setEnabled(ref: NodeHandle, enabled: boolean) {
         assertValidRef(ref);
 
+        if (ref.id === ROOT_ID) {
+            if (enabled) {
+                console.warn(`Root node (id ${ROOT_ID}) is enabled by default`);
+                return;
+            } else {
+                throw new Error(`Cannot disable root node (id ${ROOT_ID})`);
+            }
+        }
+
         if (!enabled) {
             storage.enabled[ref.id] = 0;
             _propagateWorldDisable(ref.id);
@@ -122,7 +131,7 @@ export function createFlatWorld(capacity: number): FlatWorld {
 
             // If parent is worldDisabled, this node stays worldDisabled
             const parentId: number = storage.parent[ref.id];
-            if (parentId !== NULL && storage.worldEnabled[parentId] === 0) return;
+            if (parentId === NULL || storage.worldEnabled[parentId] === 0) return;
 
             _propagateWorldEnable(ref.id);
         }
@@ -217,10 +226,8 @@ export function createFlatWorld(capacity: number): FlatWorld {
         storage.prevSibling[child.id] = NULL;
         storage.nextSibling[child.id] = NULL;
 
-        // If detached from a disabled parent, re-enable subtree
-        if (storage.worldEnabled[parentId] === 0) {
-            _propagateWorldEnable(child.id);
-        }
+        // Disable Subtree
+        _propagateWorldDisable(child.id);
     }
 
     function destroy(node: NodeHandle): void {
