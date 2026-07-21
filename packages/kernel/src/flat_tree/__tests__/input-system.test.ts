@@ -1,6 +1,6 @@
 import { createFlatWorld } from "../FlatWorld";
 import { createTouchBuffer } from "../touchBuffer";
-import { createTouchState } from "../TouchState";
+import { createTouchState } from "../touchState";
 import { createBeginInputFrame } from "../beginInputFrame";
 import { createEndInputFrame } from "../endInputFrame";
 import {FlatWorld, System, TouchEventBuffer, TouchState} from "../types";
