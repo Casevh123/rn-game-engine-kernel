@@ -90,7 +90,7 @@ export function createFlatTreeStorage(capacity: number): FlatTreeStorage {
 
         alive[id] = 0;
         enabled[id] = 1;
-        worldEnabled[id] = 1;
+        worldEnabled[id] = 0;
 
         parent[id] = NULL;
         firstChild[id] = NULL;
