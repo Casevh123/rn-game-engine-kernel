@@ -103,53 +103,39 @@ Currently, sprite transforms position sprites at their top-left corner. The rend
 
 ---
 
-## Input Pipeline (planned)
+## Input Pipeline
 
-### Architecture
+> Kernel side: **built and tested** (two-buffer design below, `packages/kernel/src/flat_tree/`).
+> Plumbing bridge and query layer: **not yet built** (todo.md 2.1, 3.3).
+> Contract details and invariants: [packages/kernel/TouchSpec.md](../kernel/TouchSpec.md).
+
+### Architecture (as implemented)
 
 ```
-Gesture.Manual() → InputBuffer (write) → InputSystem (process) → Utility functions (query)
-     ↑ plumbing side                      ↑ kernel side ────────────────────────────────→
+Gesture.Manual() → TouchEventBuffer (raw events) → beginInputFrame (cook) → TouchState → [user systems read]
+     ↑ plumbing writes via writeTouch*              ↑ first system                        ↑ query layer (unbuilt)
+                                                    endInputFrame (last system) clears transient flags, frees ended slots
 ```
 
 All on the UI thread. No bridge, no serialization.
 
-### InputBuffer
+### Two buffers, not one
 
-World-level singleton. TypedArray-backed:
+- **`TouchEventBuffer`** — raw facts written by the gesture side via the producer interface (`writeTouchDown/Move/Up/Cancel`). Fixed `MAX_TOUCHES = 10` slots; overflow throws. Phase is represented as **per-frame boolean flag arrays** (`beganThisFrame`, `movedThisFrame`, `endedThisFrame`, `canceledThisFrame`) — events, not a phase enum or state machine.
+- **`TouchState`** — the cooked per-frame snapshot gameplay systems read: current position, start position/time, previous-frame position (for deltas), visibility flags, `visibleTouchCount`.
 
-```typescript
-interface InputBuffer {
-    touchX:      Float32Array;  // [MAX_TOUCHES] — view-relative x
-    touchY:      Float32Array;  // [MAX_TOUCHES] — view-relative y
-    touchPhase:  Int32Array;    // [MAX_TOUCHES] — phase enum
-    touchId:     Int32Array;    // [MAX_TOUCHES] — OS pointer id
-    activeTouchCount: number;   // plain number
-}
-```
+### Frame bookends (kernel systems)
 
-Phase constants: `NONE=0, BEGAN=1, MOVED=2, ENDED=3, CANCELLED=4`.
+- **`createBeginInputFrame(buffer, state)`** — runs FIRST: copies events into `TouchState`, initializes start position/time on begin, tracks prev position for deltas.
+- **`createEndInputFrame(buffer, state)`** — runs LAST: clears transient flags in both buffers, frees slots of ended/cancelled touches. Ended/cancelled touches are visible for exactly one frame.
 
-### Gesture Source (plumbing side)
+### Gesture Source (plumbing side — todo 3.3)
 
-`Gesture.Manual()` wraps `<Canvas>` via `<GestureDetector>`. Four raw callbacks (`onTouchesDown`, `onTouchesMove`, `onTouchesUp`, `onTouchesCancelled`) write directly to the InputBuffer — same thread, synchronous.
+`Gesture.Manual()` wraps `<Canvas>` via `<GestureDetector>`. Four raw callbacks (`onTouchesDown`, `onTouchesMove`, `onTouchesUp`, `onTouchesCancelled`) call `writeTouch*` on the `TouchEventBuffer` — same thread, synchronous.
 
-### InputSystem (kernel side)
+### Query layer (kernel side — todo 2.1, unbuilt)
 
-Engine system that runs FIRST in system order. Maintains `TouchHistory` (start position, previous position, duration) and resets transient phases after processing:
-
-- `BEGAN` → `MOVED` (finger still touching)
-- `ENDED` → `NONE` (slot freed)
-- `CANCELLED` → `NONE` (slot freed)
-
-### Utility Functions (kernel side)
-
-Pure functions over InputBuffer + TouchHistory:
-
-- Position/phase queries: `getTouchPosition`, `getTouchPhase`, `isTouchActive`
-- Derived: `getTouchVelocity`, `getTouchDelta`, `getTouchDragFromStart`, `getTouchDuration`
-- Gesture detection: `isTap`, `isSwipe`, `isLongPress`
-- Multi-touch: `getPinchScale`, `getPinchCenter`
+Pure functions over `TouchState`: delta, drag-from-start, velocity, duration, tap/drag detection. Pinch and long-press deferred until a game pulls them.
 
 ---
 
@@ -177,10 +163,11 @@ useFrameCallback((frame) => {
 Order matters. Recommended:
 
 ```
-1. InputSystem          ← process input buffer, update history
-2. [user systems]       ← read input, update game state
+1. beginInputFrame      ← cook TouchEventBuffer into TouchState
+2. [user systems]       ← read TouchState, update game state
 3. TransformPropagation ← compose world transforms
 4. RenderCollection     ← gather visible sprites into RenderBuffer
+5. endInputFrame        ← clear transient flags, free ended touch slots
 ```
 
 ### Frame Loop
@@ -197,7 +184,7 @@ Driven by `useFrameCallback` (react-native-reanimated). Each frame:
 
 ### What the plumbing guarantees to the kernel
 
-- InputBuffer is populated before InputSystem runs (gesture callbacks fire between frames on the UI thread)
+- TouchEventBuffer is populated before `beginInputFrame` runs (gesture callbacks fire between frames on the UI thread; same-thread execution means writes never interleave with a running `step()`)
 - `world.step(dt)` is called exactly once per frame
 - `dt` is derived from `useFrameCallback`'s `frame.timeSincePreviousFrame`
 
@@ -206,7 +193,7 @@ Driven by `useFrameCallback` (react-native-reanimated). Each frame:
 - RenderBuffer is valid and fully populated after `step()` returns
 - `buffer.count` reflects the exact number of visible sprites
 - Transform and spriteType arrays are contiguous in `0..count-1`
-- No heap allocations during `step()` (zero GC pressure)
+- `step()` allocation is measured and reported honestly (see todo.md 6.1); zero-GC in hot paths is a hygiene target, not a current guarantee
 
 ### What the plumbing guarantees to React
 

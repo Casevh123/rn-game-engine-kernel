@@ -1,144 +1,111 @@
 # Plan
 
-> Current state. What's next. What's deferred.
-> Last updated: 2026-05-17
+> Product direction and true current state. The task sequence lives in [todo.md](todo.md).
+> Last updated: 2026-07-01 — after a full code audit (kernel, demo, react-native package, all tests).
 
 ---
 
-## Project Structure
+## What This Product Is
 
-This is an npm workspaces monorepo:
+**A framework other developers use to ship 2D games in React Native.** The product is the framework — not the games made with it, and not the demo. The kernel is the core, but the product surface is `@engine/react-native` plus the developer experience: install it, follow GETTING_STARTED, ship a game.
 
-```
-react-native-game-engine/
-├── packages/
-│   ├── kernel/          ← @engine/kernel — pure TS engine core
-│   └── react-native/    ← @engine/react-native — RN plumbing (skeleton)
-├── apps/
-│   └── demo/            ← Expo app — stress-test / integration demo
-├── docs/                ← Historical decision records
-├── GETTING_STARTED.md   ← How to build with this engine
-└── README.md
-```
+Everything is judged against that: a feature that makes the engine more impressive but the framework harder to use loses to one that makes shipping a game easier.
 
-- **`@engine/kernel`** — The source of truth. Data-oriented game engine kernel. Pure TypeScript. No React Native dependencies. 203 tests. Contains `'worklet'` directives (no-ops in Jest, functional in RN).
-- **`@engine/react-native`** — Bridges kernel to React Native: Skia rendering, gesture input, worklet lifecycle. Currently a skeleton — reusable patterns will be extracted from the demo as they stabilize.
-- **`apps/demo`** — Expo app that consumes both packages via workspace dependencies. Bouncing sprite stress test with perf overlay and dynamic sprite count controls.
+### The clock
+
+This project must be **vertically finished and publicly visible** in time to carry weight for the 2028 internship cycle (recruiting opens ~fall 2027). Implications:
+
+- **Vertical beats horizontal.** A complete path — kernel → RN bridge → playable sample game → public README with video — beats any additional kernel sophistication.
+- **Honest beats bold.** Performance claims are measured and reported, not asserted. "Zero-GC" is explicitly demoted from headline to hygiene: per-frame allocations get cheap fixes and an honest benchmark number, nothing more.
+- **Standards are not negotiable.** Invariant-first design, exhaustive tests, correct-by-construction APIs. The clock changes *what* gets built (vertical slice), never *how well*.
 
 ---
 
-## Runtime Target
+## Runtime Model (unchanged, validated)
 
-The kernel runs on the **UI worklet thread** — the default worklet runtime provided by react-native-reanimated. This is a deliberate change from the original worker worklet design.
+The kernel runs on the **UI worklet thread** (react-native-reanimated). Gesture input, `world.step()`, and Skia `<Atlas>` rendering share one thread — no bridge, no serialization, no transport problem. Full rationale: [docs/runtime_target_change.md](docs/runtime_target_change.md).
 
 | Concern | Technology | Thread |
 |---|---|---|
-| Engine kernel | `@engine/kernel` (TypeScript) | UI worklet thread |
-| Frame loop | `useFrameCallback` (reanimated) | UI worklet thread |
-| Rendering | `<Atlas>` + `useRSXformBuffer` (react-native-skia) | UI thread |
-| Input | `Gesture.Manual()` (react-native-gesture-handler) | UI thread |
+| Engine kernel | `@engine/kernel` (pure TS, closure factories) | UI worklet thread |
+| Frame loop | `useFrameCallback` | UI worklet thread |
+| Rendering | `<Atlas>` + RSXform buffers (react-native-skia) | UI thread |
+| Input | `Gesture.Manual()` (gesture-handler) | UI thread |
 | Scene declaration & UI | React | JS thread |
 
-**Why UI thread, not worker thread:** Synchronous rendering path (no cross-thread serialization), synchronous input (no async snapshot), no transport problem (no SharedValue throughput ceiling, no triple-buffering, no Nitro dependency). Full rationale in [docs/runtime_target_change.md](docs/runtime_target_change.md).
+**Named ceiling:** everything shares the 16.6ms frame budget with rendering. There is no escape hatch to a worker thread by design; the wall is quadratic user systems (the demo's O(n²) collision is ~4ms at 500 sprites and explodes beyond). This is a deliberate constraint, stated openly — not an oversight.
 
-**What this means:** The kernel competes with rendering for UI thread time. Benchmarks show this is acceptable — `world.step(dt)` for 500 sprites with O(n²) collision runs in ~4ms, well within the 16.6ms frame budget.
+Other deliberate constraints: fixed world capacity (no paging/growth), uniform-scale-only transforms (RSXform `(a,b,tx,ty)`, no shear/non-uniform scale), single atlas page. Each has a named trigger in [todo.md](todo.md#deferred--named-with-triggers) if a real game pulls it.
 
 ---
 
-## Current Status
+## True Current State (audited 2026-07-01)
 
-### What's Built
+### Kernel — solid core, known debts
 
-| Component | Status | Where |
+**Built and tested (257 tests, 13 suites):** SoA storage with intrusive free-list · generational handles · scene graph with O(1) attach/detach/reparent and iterative destroy · worldEnabled invariant (enabled ∧ ancestors-enabled ∧ root-reachable, per [NewWorldInvariant.md](packages/kernel/NewWorldInvariant.md)) enforced across all mutations · sparse-set component pools with swap-and-pop · deferred command buffer with step guards · RSXform transform propagation · atlas-aware render collection with pivot correction · two-buffer touch input (raw `TouchEventBuffer` → cooked `TouchState`, begin/end frame systems, per [TouchSpec.md](packages/kernel/TouchSpec.md)).
+
+**Known debts (Phase 0–1 of todo.md):**
+- Component pools swap only the columns their author remembered — parallel user columns silently desync on non-tail removal. The single latent-corruption bug in the design.
+- `pool.add/remove` and `createNode` unguarded during `step()`.
+- A queued command throwing mid-flush drops the rest of the batch.
+- Input files missing `'worklet'` directives and **not exported** from the package at all.
+- `free()` resets dead slots to enabled/world-enabled, contradicting the invariant.
+- Per-frame allocations in traversal stacks and accessors (hygiene, not headline).
+
+### Input — plumbing built, feature missing
+
+The event pipeline exists and is well-tested (54 tests). What a game developer actually calls — delta/velocity/tap/drag queries — does not exist yet, and no RN bridge wires gestures in.
+
+### `@engine/react-native` — **empty**
+
+One re-export line plus TODO comments. This is the largest gap between "kernel" and "framework," and the core of the vertical slice (todo Phase 3): `useEngine` lifecycle (with disposal — the current demo bootstrap orphans engines on `globalThis` across Fast Refresh), `<EngineCanvas>`, `useTouchBridge`, frame-loop contract.
+
+### Demo — works, hand-wired, two landmines
+
+500 sprites at 60fps with gravity + O(n²) collision + perf overlay on device. But: it survives the pool-desync bug only because it always destroys the newest sprite (a no-op swap); and it has no teardown. It becomes the first consumer of `@engine/react-native` in Phase 3, then is superseded as the showcase by the flagship sample game (Phase 5).
+
+### Documentation — consolidated as of this date
+
+ENGINE_DIFF.md (AI-generated review scaffolding) has been deleted; its verified findings live in todo.md Phases 0–1 and 6, its deferred items in the trigger table. README, GETTING_STARTED, and the react-native SPEC have been corrected against the code.
+
+**Doc map — what is authoritative for what:**
+
+| Question | Source of truth |
+|---|---|
+| Product direction, current state | this file |
+| What to do next, in order | [todo.md](todo.md) |
+| Kernel model, axioms, contracts | [packages/kernel/SPEC.md](packages/kernel/SPEC.md) |
+| worldEnabled invariant | [packages/kernel/NewWorldInvariant.md](packages/kernel/NewWorldInvariant.md) |
+| Touch input contract | [packages/kernel/TouchSpec.md](packages/kernel/TouchSpec.md) |
+| RN bridge contracts | [packages/react-native/SPEC.md](packages/react-native/SPEC.md) (rewrite scheduled, todo 3.6) |
+| Historical decisions | [docs/](docs/) |
+
+---
+
+## Open Decisions
+
+| Decision | Context | When |
 |---|---|---|
-| SoA memory pool, free-list allocator | ✅ Complete | `packages/kernel/` |
-| Scene graph (tree: attach/detach/destroy/reparent) | ✅ Complete | `packages/kernel/` |
-| Generational handles (NodeHandle) | ✅ Complete | `packages/kernel/` |
-| Component pools (swap-and-pop, registry) | ✅ Complete | `packages/kernel/` |
-| Command buffer (deferred mutations) | ✅ Complete | `packages/kernel/` |
-| RSXform transforms (local + world) | ✅ Complete | `packages/kernel/` |
-| Transform propagation system | ✅ Complete | `packages/kernel/` |
-| SpritePool (ComponentPool wrapper) | ✅ Complete | `packages/kernel/` |
-| Render collection system (gather operation) | ✅ Complete | `packages/kernel/` |
-| Sprite atlas awareness + pivot correction | ✅ Complete | `packages/kernel/` |
-| Worklet compatibility ('worklet' directives) | ✅ Verified | `packages/kernel/` |
-| Demo: Skia Atlas rendering | ✅ Working | `apps/demo/` |
-| Demo: gravity + O(n²) collision | ✅ Working | `apps/demo/` |
-| Demo: perf overlay + dynamic sprite count | ✅ Working | `apps/demo/` |
-| Monorepo (npm workspaces) | ✅ Complete | Root |
+| Flagship sample game choice | Sets the scope of Phase 4 features | Start of Phase 4 (todo 4.0) |
+| Camera representation | Dedicated node vs storage column vs render-time offset | Before todo 4.1 |
+| Z-order key | Layer component vs y-sort vs tree order | Before todo 4.2 |
+| Step-mutation guard mechanism | Throw + command-buffer ops vs assert-only | todo 1.2 |
+| Flush failure semantics | Idempotent destroy + skip-stale vs validate-then-apply | todo 1.3 |
+| Distribution | npm publish vs git install | Before todo 6.3 |
+| Fixed vs variable timestep | dt clamp is the interim answer | When physics reproducibility matters |
 
-### What's Proven
-
-- Kernel factories instantiate and tick correctly in worklet context (A3 audit: 18/18)
-- 209 kernel tests pass in Jest (worklet directives are no-ops)
-- 500 sprites at 60fps with gravity + collision on iPhone hardware
-- Workspace dependency resolution works with Reanimated babel plugin
-
----
-
-## Immediate Next
-
-### 1. Input System
-
-**Goal:** Touch input flows from gesture callbacks to the kernel, processed as state each frame.
-
-**Kernel side** (pure, testable):
-- `InputBuffer` — TypedArray-backed world-level singleton (touchX/Y, phase, id per slot)
-- `InputSystem` — engine system: updates `TouchHistory`, resets transient phases
-- Utility functions — pure queries: velocity, delta, tap/swipe/longpress detection
-
-**Plumbing side** (React Native):
-- `Gesture.Manual()` wraps `<Canvas>` — writes directly to InputBuffer on UI thread
-- Same-thread, synchronous, zero-latency
-
-**Design:** Settled. See [input system architecture](packages/react-native/SPEC.md#input-pipeline-planned) for the full contract.
-
----
-
-## Open Architecture Decisions
-
-| Decision | Context | When Needed |
-|---|---|---|
-| Camera: dedicated node vs storage column vs render-time offset | Affects render collection — camera inverse transform applied to all sprites | Before camera implementation |
-| Z-ordering strategy: tree-order vs z-index component vs y-sort | Affects render collection output ordering | Before layered rendering |
-| Particle path: full entities vs dedicated lightweight pool | Full entities carry overhead (transforms, tree structure). Particles may warrant a dedicated system | Before particle effects |
-| React scene API: JSX reconciler vs imperative commands | How React declares entities. Affects developer ergonomics | When the engine API stabilizes |
-| Fixed vs variable timestep | Variable (current) is simpler. Fixed is more deterministic | When physics demands reproducibility |
-
-### Resolved Decisions (no longer open)
+## Resolved Decisions
 
 | Decision | Resolution |
 |---|---|
-| Runtime target | UI worklet thread (not worker worklet) |
-| Kernel packaging | Monorepo workspace (not source copy, not npm publish) |
-| Render buffer format | Parallel Float32Array (transforms) + Int32Array (spriteTypes) |
-| Transport mechanism | Same-thread globalThis (no SharedValue bridge, no Nitro) |
-| Worklet directives | Permanent in kernel source (no-ops in Jest) |
-| Component pool design | Closure-factory with swap callback (not class inheritance) |
-
----
-
-## Future Features
-
-Not roadmapped with version numbers. Listed by category for reference.
-
-### Kernel Features (pure, no RN dependency)
-- **Animation system** — AnimationPool + AnimationSystem advancing sprite frames
-- **Camera system** — camera node, inverse transform in render collection
-- **Z-ordering** — draw order control in render buffer
-- **Physics** — velocity integration, collision detection, spatial index
-- **Event output buffer** — discrete events emitted per frame (sound triggers, lifecycle)
-
-### Plumbing Features (React Native)
-- **`useEngine` hook** — reusable bootstrap pattern
-- **`<EngineCanvas>` component** — Canvas + Atlas + buffer management
-- **`useInputBridge` hook** — Gesture.Manual() → InputBuffer wiring
-- **`<PerfOverlay>` component** — extractable from demo
-- **Scene management** — load/unload/transition
-
-### Production Features (v-far)
-- Non-sprite rendering (circles, rects, paths)
-- Text rendering
-- Sound (kernel emits events, played on native thread)
-- Asset pipeline (spritesheet definitions, animation sequences)
-- React reconciler (JSX → kernel commands)
+| Runtime target | UI worklet thread (not worker) — [docs/runtime_target_change.md](docs/runtime_target_change.md) |
+| Kernel architecture | Closure factories, zero classes (worklet serialization) |
+| Storage | SoA TypedArray columns, fixed capacity, intrusive free-list |
+| Transforms | RSXform `(a,b,tx,ty)`, trig-free composition, 1:1 with Skia |
+| worldEnabled semantics | enabled ∧ all-ancestors-enabled ∧ root-reachable ([NewWorldInvariant.md](packages/kernel/NewWorldInvariant.md)) |
+| Input design | Two-buffer: raw event buffer (producer-written) → cooked per-frame state, begin/end bookend systems, per-frame boolean phase flags (not a phase enum) |
+| React scene API | Imperative first; reconciler deferred until after the sample game ships |
+| Zero-GC | Demoted from headline claim to measured hygiene |
+| Render buffer format | Parallel Float32Array transforms + Int32Array spriteTypes, contiguous 0..count |
+| Packaging | npm workspaces monorepo |

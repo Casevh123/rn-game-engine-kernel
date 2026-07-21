@@ -7,7 +7,7 @@ A data-oriented 2D game engine for React Native. Pure TypeScript kernel running 
 A high-performance game engine built for React Native from the ground up. Instead of fighting React's reactive model, the engine owns all simulation state on a dedicated worklet context while React serves as a scene declaration layer and Skia handles GPU rendering.
 
 **Three layers:**
-- **`@engine/kernel`** — The engine core. Pure TypeScript. SoA memory pools, closure-factory architecture, generational handles, deferred command buffer. Runs in any JS context. 203 tests.
+- **`@engine/kernel`** — The engine core. Pure TypeScript. SoA memory pools, closure-factory architecture, generational handles, deferred command buffer. Runs in any JS context. 257 tests.
 - **`@engine/react-native`** — The bridge. Connects the kernel to Skia rendering, gesture input, and the worklet lifecycle. Currently a skeleton with documented contracts.
 - **`apps/demo`** — A stress-test demo. Bouncing sprites with gravity and O(n²) collision at 60fps.
 
@@ -115,7 +115,7 @@ No classes. No prototypes. Every module is a factory function returning a plain 
 ## Quick Example
 
 ```typescript
-import { createFlatWorld, createSpritePool } from '@engine/kernel';
+import { createFlatWorld, createSpritePool, SpriteAtlasLookup } from '@engine/kernel';
 
 // Create a world with capacity for 1024 nodes
 const world = createFlatWorld(1024);
@@ -131,9 +131,17 @@ const compIdx = spritePool.add(node);
 spriteType[compIdx] = 0; // sprite type index
 world.setLocalPosition(node, 100, 200);
 
+// Atlas metadata: per-sprite-type dimensions and normalized pivots
+const atlas: SpriteAtlasLookup = {
+  widths:  new Float32Array([64]),
+  heights: new Float32Array([64]),
+  pivotXs: new Float32Array([0.5]),
+  pivotYs: new Float32Array([0.5]),
+};
+
 // Add transform propagation + render collection
 world.addSystem(world.createTransformPropagationSystem());
-const { system, buffer } = world.createRenderCollectionSystem(spritePool, spriteType);
+const { system, buffer } = world.createRenderCollectionSystem(spritePool, spriteType, atlas);
 world.addSystem(system);
 
 // Tick — systems run, RenderBuffer is populated
@@ -155,9 +163,9 @@ world.step(1 / 60);
 
 ## Status
 
-**Engine core: feature-complete for v0.** All kernel systems are built, tested, and verified on-device. The demo runs 500+ sprites at 60fps with gravity and collision.
+**Kernel: built and tested** — scene graph, transforms, render collection with pivot correction, touch input pipeline, 257 tests, verified on-device (500+ sprites at 60fps with gravity and collision in the demo).
 
-**Next:** Input system and sprite pivot correction. See [plan.md](plan.md) for details.
+**Framework: in progress.** `@engine/react-native` (engine lifecycle, canvas, input bridge) is the current focus. Direction in [plan.md](plan.md); task sequence in [todo.md](todo.md).
 
 ## Development
 

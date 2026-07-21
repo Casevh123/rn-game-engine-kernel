@@ -81,8 +81,8 @@ import React, { useEffect } from 'react';
 import { Dimensions, View } from 'react-native';
 import { Canvas, Atlas, useImage, useRSXformBuffer, useRectBuffer } from '@shopify/react-native-skia';
 import { useSharedValue, useFrameCallback } from 'react-native-reanimated';
-import { createFlatWorld, createSpritePool } from '@engine/kernel';
-import { FRAME_SIZE } from './sprites';
+import { createFlatWorld, createSpritePool, SpriteAtlasLookup } from '@engine/kernel';
+import { FRAME_SIZE, NUM_SPRITE_TYPES } from './sprites';
 
 const ENGINE_ID = '__engine';
 const MAX_NODES = 512;
@@ -127,10 +127,19 @@ export function GameScreen() {
                 }
             });
 
+            // Atlas metadata: dimensions + normalized pivot per sprite type
+            // (0.5, 0.5) = centered pivot — the node's position is the sprite's center
+            const atlas: SpriteAtlasLookup = {
+                widths:  new Float32Array(NUM_SPRITE_TYPES).fill(FRAME_SIZE),
+                heights: new Float32Array(NUM_SPRITE_TYPES).fill(FRAME_SIZE),
+                pivotXs: new Float32Array(NUM_SPRITE_TYPES).fill(0.5),
+                pivotYs: new Float32Array(NUM_SPRITE_TYPES).fill(0.5),
+            };
+
             // Engine systems (order matters!)
             world.addSystem(world.createTransformPropagationSystem());
             const { system: renderSystem, buffer } =
-                world.createRenderCollectionSystem(spritePool, spriteType);
+                world.createRenderCollectionSystem(spritePool, spriteType, atlas);
             world.addSystem(renderSystem);
 
             // Spawn sprites
@@ -262,7 +271,7 @@ world.addSystem(healthSystem);
 
 **Key rules:**
 - Don't call `world.destroy()`, `attach()`, `detach()`, or `reparent()` directly during step — use `world.commandBuffer`
-- `world.createNode()` and `pool.add()` / `pool.remove()` are immediate and safe during step (but don't modify a pool you're currently iterating)
+- Treat `world.createNode()` and `pool.add()` / `pool.remove()` as forbidden during step too. They are not yet runtime-guarded, but mutating a pool mid-step corrupts iteration — spawn and add components outside `step()` (guards + command-buffer support are scheduled, see todo.md 1.2)
 - Systems close over their data — this is the intended pattern
 
 ---
@@ -301,5 +310,5 @@ vy[idx] = -50;
 
 - Read the [Kernel Specification](packages/kernel/SPEC.md) for the full invariant model
 - Read the [Plumbing Specification](packages/react-native/SPEC.md) for how the rendering pipeline works
-- Check the [Plan](plan.md) for upcoming features (input system, sprite pivot correction)
+- Check the [Plan](plan.md) for direction and [todo.md](todo.md) for what's being built next
 - Look at `apps/demo/GameScreen.tsx` for a full working example with gravity, collision, and perf monitoring
