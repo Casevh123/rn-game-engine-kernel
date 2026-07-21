@@ -2,6 +2,7 @@ import {TouchState} from "./types";
 import {MAX_TOUCHES} from "./constants";
 
 export function createTouchState(): TouchState {
+    'worklet';
     const touchX: Float32Array = new Float32Array(MAX_TOUCHES);
     const touchY: Float32Array = new Float32Array(MAX_TOUCHES);
     const startX: Float32Array = new Float32Array(MAX_TOUCHES).fill(0);

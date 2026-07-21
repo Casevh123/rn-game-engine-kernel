@@ -2,6 +2,7 @@ import {TouchEventBuffer} from "./types";
 import {MAX_TOUCHES} from "./constants";
 
 export function createTouchBuffer(): TouchEventBuffer {
+    'worklet';
     const touchX: Float32Array = new Float32Array(MAX_TOUCHES).fill(0);
     const touchY: Float32Array = new Float32Array(MAX_TOUCHES).fill(0);
     const beginX: Float32Array = new Float32Array(MAX_TOUCHES).fill(0);

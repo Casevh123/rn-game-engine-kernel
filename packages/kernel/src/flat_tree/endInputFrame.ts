@@ -2,6 +2,7 @@ import {FlatWorld, TouchEventBuffer, System, TouchState} from "./types";
 import {MAX_TOUCHES} from "./constants";
 
 export function createEndInputFrame(buffer: TouchEventBuffer, state: TouchState): System {
+    'worklet';
     return (world: FlatWorld, dt: number): void => {
         for (let i: number = 0; i < MAX_TOUCHES; i++) {
             if (buffer.touchId[i] === -1){
@@ -33,6 +34,7 @@ export function createEndInputFrame(buffer: TouchEventBuffer, state: TouchState)
 }
 
 function clearTouchEventSlot(buffer: TouchEventBuffer, idx: number): void {
+    'worklet';
     buffer.touchX[idx] = 0;
     buffer.touchY[idx] = 0;
     buffer.beginX[idx] = 0;
@@ -45,6 +47,7 @@ function clearTouchEventSlot(buffer: TouchEventBuffer, idx: number): void {
 }
 
 function clearTouchStateSlot(state: TouchState, idx: number): void {
+    'worklet';
     state.touchX[idx] = 0;
     state.touchY[idx] = 0;
     state.startX[idx] = 0;

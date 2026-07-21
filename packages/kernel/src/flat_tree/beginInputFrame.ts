@@ -2,6 +2,7 @@ import {FlatWorld, TouchEventBuffer, System, TouchState} from "./types";
 import {MAX_TOUCHES} from "./constants";
 
 export function createBeginInputFrame(buffer: TouchEventBuffer, state: TouchState): System {
+    'worklet';
     return (world: FlatWorld, dt: number): void => {
         for (let i: number = 0; i < MAX_TOUCHES; i++) {
             if (buffer.touchId[i] === -1){
