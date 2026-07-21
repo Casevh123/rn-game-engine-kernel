@@ -177,6 +177,10 @@ export function createFlatWorld(capacity: number): FlatWorld {
             throw new Error("Child already has parent");
         }
 
+        if (_isAncestor(child.id, parent.id)) {
+            throw new Error("Cannot create cycle");
+        }
+
         storage.parent[child.id] = parent.id;
 
         const oldFirst: number = storage.firstChild[parent.id];

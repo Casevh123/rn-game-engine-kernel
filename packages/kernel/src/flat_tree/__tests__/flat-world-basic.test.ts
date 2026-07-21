@@ -259,6 +259,19 @@ describe('mutation tests', () => {
         expect(() => world.attach(node2, node1)).toThrow("Child already has parent");
     })
 
+    it('cannot attach a child to one of its descendants', () => {
+        const world: FlatWorld = createFlatWorld(10);
+        const root: NodeHandle = world.root;
+        const node1: NodeHandle = world.createNode();
+        const node2: NodeHandle = world.createNode();
+        const node3: NodeHandle = world.createNode();
+
+        world.attach(node2, node1);
+        world.attach(node3, node2);
+
+        expect(() => {world.attach(node1, node3)}).toThrow("Cannot create cycle")
+    })
+
     it('cannot detach a stale reference', () => {
         const world: FlatWorld = createFlatWorld(10);
         const doomedNode: NodeHandle = world.createNode();
