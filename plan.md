@@ -43,7 +43,7 @@ Other deliberate constraints: fixed world capacity (no paging/growth), uniform-s
 
 ### Kernel — solid core, known debts
 
-**Built and tested (257 tests, 13 suites):** SoA storage with intrusive free-list · generational handles · scene graph with O(1) attach/detach/reparent and iterative destroy · worldEnabled invariant (enabled ∧ ancestors-enabled ∧ root-reachable, per [NewWorldInvariant.md](packages/kernel/NewWorldInvariant.md)) enforced across all mutations · sparse-set component pools with swap-and-pop · deferred command buffer with step guards · RSXform transform propagation · atlas-aware render collection with pivot correction · two-buffer touch input (raw `TouchEventBuffer` → cooked `TouchState`, begin/end frame systems, per [TouchSpec.md](packages/kernel/TouchSpec.md)).
+**Built and tested (258 tests, 13 suites):** SoA storage with intrusive free-list · generational handles · scene graph with O(1) attach/detach/reparent and iterative destroy · worldEnabled invariant (enabled ∧ ancestors-enabled ∧ root-reachable, per [NewWorldInvariant.md](packages/kernel/NewWorldInvariant.md)) enforced across all mutations · sparse-set component pools with swap-and-pop · deferred command buffer with step guards · RSXform transform propagation · atlas-aware render collection with pivot correction · two-buffer touch input (raw `TouchEventBuffer` → cooked `TouchState`, begin/end frame systems, per [TouchSpec.md](packages/kernel/TouchSpec.md)).
 
 **Known debts (Phase 0–1 of todo.md):**
 - Component pools swap only the columns their author remembered — parallel user columns silently desync on non-tail removal. The single latent-corruption bug in the design.

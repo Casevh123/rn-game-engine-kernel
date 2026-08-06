@@ -7,7 +7,7 @@ A data-oriented 2D game engine for React Native. Pure TypeScript kernel running 
 A high-performance game engine built for React Native from the ground up. Instead of fighting React's reactive model, the engine owns all simulation state on a dedicated worklet context while React serves as a scene declaration layer and Skia handles GPU rendering.
 
 **Three layers:**
-- **`@engine/kernel`** — The engine core. Pure TypeScript. SoA memory pools, closure-factory architecture, generational handles, deferred command buffer. Runs in any JS context. 257 tests.
+- **`@engine/kernel`** — The engine core. Pure TypeScript. SoA memory pools, closure-factory architecture, generational handles, deferred command buffer. Runs in any JS context. 258 tests.
 - **`@engine/react-native`** — The bridge. Connects the kernel to Skia rendering, gesture input, and the worklet lifecycle. Currently a skeleton with documented contracts.
 - **`apps/demo`** — A stress-test demo. Bouncing sprites with gravity and O(n²) collision at 60fps.
 
@@ -163,7 +163,7 @@ world.step(1 / 60);
 
 ## Status
 
-**Kernel: built and tested** — scene graph, transforms, render collection with pivot correction, touch input pipeline, 257 tests, verified on-device (500+ sprites at 60fps with gravity and collision in the demo).
+**Kernel: built and tested** — scene graph, transforms, render collection with pivot correction, touch input pipeline, 258 tests, verified on-device (500+ sprites at 60fps with gravity and collision in the demo).
 
 **Framework: in progress.** `@engine/react-native` (engine lifecycle, canvas, input bridge) is the current focus. Direction in [plan.md](plan.md); task sequence in [todo.md](todo.md).
 
