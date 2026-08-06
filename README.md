@@ -13,11 +13,9 @@ A data-oriented 2D game engine kernel for React Native, written from scratch in 
 
 ## Demo
 
-<!-- ── DEMO VIDEO ──
-To embed the clip: edit this file in the GitHub web editor and drag docs/demo.mp4
-(kept locally, untracked) onto the blank line below. GitHub uploads it to its CDN
-and inserts a user-attachments URL that renders as an inline player — the video
-never enters repo history. Delete this comment afterwards.
+https://github.com/user-attachments/assets/c9a97f71-8a12-472f-a2f5-6822121df79e
+
+
 The recordings live untracked at docs/demo.mp4 (compressed) and docs/demo.gif (original). -->
 
 
