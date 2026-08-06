@@ -23,6 +23,17 @@ export function writeTouchDown(buffer: TouchEventBuffer, id: number, x: number, 
     buffer.touchId[i] = id;
 }
 
+export function findInBuffer(buffer: TouchEventBuffer, id: number): number {
+    'worklet';
+    for (let i = 0; i < MAX_TOUCHES; i++) {
+        if (buffer.touchId[i] === id) {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
 export function writeTouchMove(buffer: TouchEventBuffer, id: number, x: number, y: number) {
     'worklet';
     const i: number = findInBuffer(buffer, id);
@@ -60,13 +71,3 @@ export function writeTouchCancel(buffer: TouchEventBuffer, id: number) {
     buffer.canceledThisFrame[i] = 1;
 }
 
-export function findInBuffer(buffer: TouchEventBuffer, id: number): number {
-    'worklet';
-    for (let i = 0; i < MAX_TOUCHES; i++) {
-        if (buffer.touchId[i] === id) {
-            return i;
-        }
-    }
-
-    return -1;
-}
