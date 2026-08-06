@@ -48,7 +48,7 @@ See [runtime_target_change.md](../../docs/runtime_target_change.md) for the full
 - The kernel code itself (factories, SoA storage, systems, command buffer)
 - The closure-factory architecture (worklet serialization still strips prototypes)
 - `'worklet'` directives (still required for Babel plugin serialization)
-- All kernel tests (runtime-agnostic — 203 pass in Jest)
+- All kernel tests (runtime-agnostic — 258 pass in Jest)
 
 ### Authority Model
 
@@ -94,20 +94,18 @@ Two Skia buffer hooks translate the kernel's RenderBuffer into Atlas-compatible 
 
 Both callbacks access the engine via `globalThis` on the UI worklet thread.
 
-### Sprite Pivot Correction (planned)
+### Sprite Pivot Correction (implemented, kernel-side)
 
-Currently, sprite transforms position sprites at their top-left corner. The render collection system needs to account for sprite dimensions and pivot points to enable center-based positioning. This requires:
-
-- A `SpriteAtlasLookup` structure mapping sprite types to dimensions and pivots
-- Pivot offset applied during render collection (kernel-side, in the gather operation)
+The render collection system applies pivot correction during the gather operation: a `SpriteAtlasLookup` (dimensions + normalized pivots per sprite type) is injected at system creation, and the emitted `tx/ty` place the sprite's pivot — not its top-left corner — at the entity's world position. Formula and rationale live in the [kernel SPEC](../kernel/SPEC.md#render-collection).
 
 ---
 
 ## Input Pipeline
 
 > Kernel side: **built and tested** (two-buffer design below, `packages/kernel/src/flat_tree/`).
-> Plumbing bridge and query layer: **not yet built** (todo.md 2.1, 3.3).
-> Contract details and invariants: [packages/kernel/TouchSpec.md](../kernel/TouchSpec.md).
+> Gesture bridge: **proven on-device**, hand-wired in the demo (`apps/demo/GameScreen.tsx`); the reusable package hook is todo 3.3.
+> Query layer: **not yet built** (todo.md 2.1).
+> Contract details and invariants: [TouchSpec.md](../kernel/working_docs/TouchSpec.md).
 
 ### Architecture (as implemented)
 
@@ -129,9 +127,9 @@ All on the UI thread. No bridge, no serialization.
 - **`createBeginInputFrame(buffer, state)`** — runs FIRST: copies events into `TouchState`, initializes start position/time on begin, tracks prev position for deltas.
 - **`createEndInputFrame(buffer, state)`** — runs LAST: clears transient flags in both buffers, frees slots of ended/cancelled touches. Ended/cancelled touches are visible for exactly one frame.
 
-### Gesture Source (plumbing side — todo 3.3)
+### Gesture Source (demonstrated in the demo; package extraction is todo 3.3)
 
-`Gesture.Manual()` wraps `<Canvas>` via `<GestureDetector>`. Four raw callbacks (`onTouchesDown`, `onTouchesMove`, `onTouchesUp`, `onTouchesCancelled`) call `writeTouch*` on the `TouchEventBuffer` — same thread, synchronous.
+`Gesture.Manual()` wraps `<Canvas>` via `<GestureDetector>`. Four raw callbacks (`onTouchesDown`, `onTouchesMove`, `onTouchesUp`, `onTouchesCancelled`) call `writeTouch*` on the `TouchEventBuffer` — same thread, synchronous. The producer guards its writes: events arriving before engine bootstrap are dropped, as are move/up/cancel events for unknown ids and downs that would exceed `MAX_TOUCHES` (the kernel write functions throw on contract violations by design).
 
 ### Query layer (kernel side — todo 2.1, unbuilt)
 

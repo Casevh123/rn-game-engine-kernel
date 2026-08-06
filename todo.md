@@ -20,9 +20,9 @@
 The theme: the framework's promise to users is *correct by construction, not correct if you're careful*. These are breaking changes — cheapest now, before the RN layer and sample game are built on top.
 
 - [ ] **1.1 Multi-column component pools — the structural fix. (L)**
-  - Problem: the swap-and-pop callback swaps only the columns its author remembered. `SpritePool` swaps only `spriteType`; the demo's `vx/vy/px/py` desync on any non-tail removal. The demo survives *by accident* — it only ever destroys the newest sprite (`handles.pop()`), which is always the last pool index, so the swap degenerates to a no-op.
+  - Problem: the swap-and-pop callback swaps only the columns its author remembered. `SpritePool` swaps only `spriteType`; the demo previously desynced `vx/vy/px/py` on any non-tail removal and survived *by accident* (it only destroyed the newest sprite — a no-op swap). Fixed in the demo 2026-08-06 by hand-swapping all five columns, but the API still lets the next user make the original mistake.
   - Change: components register their TypedArray columns with the pool (a column descriptor); the pool generates the swap over all of them. Hand-written swap callbacks cease to exist in the public API.
-  - Acceptance: a test removing a *middle* element from a pool with ≥ 2 columns asserts no desync; `SpritePool` and the demo migrated; the "your swap callback must swap ALL your arrays" warning in GETTING_STARTED becomes obsolete and is deleted.
+  - Acceptance: a test removing a *middle* element from a pool with ≥ 2 columns asserts no desync; `SpritePool` and the demo (already on `createComponentPool` with a full manual swap) migrated; the "your swap callback must swap ALL your arrays" warning in GETTING_STARTED becomes obsolete and is deleted.
 - [ ] **1.2 Guard component/node mutation during `step()`. (M)**
   - `pool.add/remove` and `createNode()` are unguarded mid-step (GETTING_STARTED currently *recommends* them). A `pool.add` inside a system mutates the dense array being iterated.
   - Recommendation: throw like the structural ops (consistent with Axiom 9) and extend the CommandBuffer with `spawn`/`addComponent`/`removeComponent` ops so systems still have a path.
@@ -37,7 +37,7 @@ The theme: the framework's promise to users is *correct by construction, not cor
 
 ## Phase 2 — Input becomes a feature, not plumbing (kernel)
 
-- [ ] **2.1 Touch query layer. (M)** Pure functions over `TouchState`: `getTouchDelta`, `getTouchDragFromStart`, `getTouchVelocity`, `getTouchDuration`, `isTap`, `isDrag(threshold)`. Jest-tested against the TouchSpec invariants (delta contract, one-frame visibility of ended touches). Scope = what the sample game needs; pinch/long-press deferred until pulled. Update [TouchSpec.md](packages/kernel/TouchSpec.md) as the contract grows.
+- [ ] **2.1 Touch query layer. (M)** Pure functions over `TouchState`: `getTouchDelta`, `getTouchDragFromStart`, `getTouchVelocity`, `getTouchDuration`, `isTap`, `isDrag(threshold)`. Jest-tested against the TouchSpec invariants (delta contract, one-frame visibility of ended touches). Scope = what the sample game needs; pinch/long-press deferred until pulled. Update [TouchSpec.md](packages/kernel/working_docs/TouchSpec.md) as the contract grows.
 - [ ] **2.2 Decide the hit-test story. (S)** Screen→world requires the camera (4.1). Decide now, build then: `screenToWorld(camera, x, y)` + a world-space point/AABB hit helper. Document the decision in plan.md.
 
 ## Phase 3 — The vertical slice: `@engine/react-native` becomes real (L)
@@ -46,7 +46,7 @@ This is the product surface, and today it is one re-export line. Biggest gap bet
 
 - [ ] **3.1 `useEngine(setup)`** — owns world creation on the UI thread, keyed replacement on Fast Refresh, disposal on unmount. Kills the current landmine: the demo bootstraps inside `useFrameCallback` onto `globalThis` with no teardown, so every remount/HMR orphans an engine.
 - [ ] **3.2 `<EngineCanvas>`** — Canvas + Atlas + `useRSXformBuffer`/`useRectBuffer` wiring from a `RenderBuffer` + atlas descriptor (extract the pattern from `apps/demo/GameScreen.tsx:310-361`).
-- [ ] **3.3 `useTouchBridge`** — `GestureDetector` + `Gesture.Manual()` → `writeTouch*` into the `TouchEventBuffer`. First on-device proof of the whole input pipe.
+- [ ] **3.3 `useTouchBridge`** — `GestureDetector` + `Gesture.Manual()` → `writeTouch*` into the `TouchEventBuffer`. The on-device proof of the input pipe landed 2026-08-06 (hand-wired in the demo: finger-as-collider through the full pipeline); this task extracts that wiring into the package hook.
 - [ ] **3.4 Frame-loop contract** — `beginInputFrame → user systems → transformPropagation → renderCollection → endInputFrame`, with a dt clamp (~33ms cap) so hitches don't explode physics. Interim answer until the fixed-timestep decision.
 - [ ] **3.5 Rewrite the demo on the new package.** Acceptance: `GameScreen.tsx` contains game logic only — zero direct `globalThis`/Skia/gesture wiring; Fast Refresh doesn't orphan engines; add one touch interaction (drag/flick) proving input end-to-end on device.
 - [ ] **3.6 Rewrite `packages/react-native/SPEC.md` from the implementation** (it currently specs by aspiration).

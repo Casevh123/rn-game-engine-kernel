@@ -46,7 +46,7 @@ npm install @engine/kernel @engine/react-native
 
 ## 4. Configure Babel
 
-The Reanimated Babel plugin is required to process `'worklet'` directives. Expo SDK 54+ includes this automatically via the `expo-router` preset, but if you need to add it manually:
+The Reanimated Babel plugin is required to process `'worklet'` directives. `babel-preset-expo` (Expo SDK 50+) includes this automatically, but if you need to add it manually:
 
 ```js
 // babel.config.js
@@ -81,7 +81,7 @@ import React, { useEffect } from 'react';
 import { Dimensions, View } from 'react-native';
 import { Canvas, Atlas, useImage, useRSXformBuffer, useRectBuffer } from '@shopify/react-native-skia';
 import { useSharedValue, useFrameCallback } from 'react-native-reanimated';
-import { createFlatWorld, createSpritePool, SpriteAtlasLookup } from '@engine/kernel';
+import { createFlatWorld, createComponentPool, SpriteAtlasLookup } from '@engine/kernel';
 import { FRAME_SIZE, NUM_SPRITE_TYPES } from './sprites';
 
 const ENGINE_ID = '__engine';
@@ -105,12 +105,21 @@ export function GameScreen() {
         // Bootstrap engine (runs once)
         if (!g[ENGINE_ID] && initialized.value) {
             const world = createFlatWorld(MAX_NODES);
-            const { pool: spritePool, spriteType } = createSpritePool(world, MAX_SPRITES);
-            world.registerPool(spritePool);
 
-            // Velocity data (user-owned)
+            // Per-sprite data (user-owned), indexed by component index.
+            // The swap callback must swap EVERY one of these arrays —
+            // see "Creating Component Pools" below.
+            const spriteType = new Int32Array(MAX_SPRITES);
             const vx = new Float32Array(MAX_SPRITES);
             const vy = new Float32Array(MAX_SPRITES);
+
+            const spritePool = createComponentPool(world, MAX_SPRITES, (a, b) => {
+                'worklet';
+                let tmp = spriteType[a]; spriteType[a] = spriteType[b]; spriteType[b] = tmp;
+                tmp = vx[a]; vx[a] = vx[b]; vx[b] = tmp;
+                tmp = vy[a]; vy[a] = vy[b]; vy[b] = tmp;
+            });
+            world.registerPool(spritePool);
 
             // Movement system
             world.addSystem((w, dt) => {
@@ -235,13 +244,14 @@ You should see colored squares bouncing around the screen at 60fps.
 **Order matters.** Systems run sequentially in the order they're registered. The recommended order is:
 
 ```
-1. InputSystem          ← process input (when implemented)
+1. beginInputFrame      ← cook raw touch events into TouchState (if using input)
 2. [your systems]       ← movement, physics, game logic
 3. TransformPropagation ← compose world transforms from local transforms
 4. RenderCollection     ← gather visible sprites into RenderBuffer
+5. endInputFrame        ← clear per-frame touch flags, free ended slots (if using input)
 ```
 
-Why: Your systems write to local transforms. Propagation computes world transforms from those locals. Render collection reads world transforms and populates the RenderBuffer that Skia draws from.
+Why: Your systems write to local transforms. Propagation computes world transforms from those locals. Render collection reads world transforms and populates the RenderBuffer that Skia draws from. The input bookends are required to be first and last per the [touch contract](packages/kernel/working_docs/TouchSpec.md); `apps/demo/GameScreen.tsx` shows the full wiring including the gesture side.
 
 ---
 

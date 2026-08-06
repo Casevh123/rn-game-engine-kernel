@@ -148,8 +148,8 @@ This was proven empirically (see [A3 audit report](../../docs/a3_audit_report.md
 
 | Operation | Preconditions | Postconditions |
 |---|---|---|
-| `createNode()` | Free list non-empty | Slot popped, alive=1, enabled=1, worldEnabled=1, version bumped, NodeHandle returned |
-| `destroy(ref)` | Valid ref, not root | Subtree destroyed depth-first. For each node: pools cleaned, slot freed (worldEnabled reset to 1), version bumped |
+| `createNode()` | Free list non-empty | Slot popped, alive=1, enabled=1, worldEnabled=0 (fresh nodes are world-disabled until attached — Axiom 15: not root-reachable), version bumped, NodeHandle returned |
+| `destroy(ref)` | Valid ref, not root | Subtree destroyed depth-first. For each node: pools cleaned, slot freed (left world-disabled; `allocate()` is the single reset point and bumps the version). All prior handles are permanently stale |
 
 ### Tree Mutations
 

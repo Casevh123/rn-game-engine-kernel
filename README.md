@@ -58,6 +58,16 @@ The kernel is where the interesting work is:
 - **Two-buffer input pipeline** — raw touch events accumulate in a ring buffer, cooked into per-frame `TouchState` by begin/end-frame systems, per a written contract ([TouchSpec.md](packages/kernel/working_docs/TouchSpec.md)).
 - **Tested at the contract level** — 258 tests targeting the specified invariants (handle staleness, swap-and-pop integrity, enable-state transitions, command-buffer guards), not just happy paths.
 
+## Authorship and AI use
+
+This repo is explicit about what was hand-written and what was AI-generated, so you can point your attention at the part that demonstrates engineering:
+
+- **The kernel and its 258 tests (`packages/kernel/src/`) are almost entirely hand-written.** That is the substance of this project — the SoA storage, scene graph, generational handles, invariant enforcement, component pools, transform math, input pipeline, and the contract-level test suite. AI contributed a few mechanical passes (e.g. adding `'worklet'` directives across the input layer) and was used as a sounding board when working out the specs.
+- **The working docs (`packages/kernel/working_docs/`) are hand-written** — author-owned design contracts like the worldEnabled invariant matrix and the touch input spec.
+- **The demo app, the monorepo scaffolding, and the rest of the documentation (this README, the SPEC files, GETTING_STARTED) are AI-generated**, produced under the author's direction and review.
+
+If you are evaluating the author's work: read the kernel source and its tests.
+
 ## Honest limitations
 
 Known gaps, tracked in [todo.md](todo.md):
