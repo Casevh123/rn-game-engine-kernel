@@ -13,18 +13,13 @@ A data-oriented 2D game engine kernel for React Native, written from scratch in 
 
 ## Demo
 
-<!-- ── DEMO VIDEO ──
-To embed the clip: edit this file in the GitHub web editor and drag docs/demo.mp4
-(kept locally, untracked) onto the blank line below. GitHub uploads it to its CDN
-and inserts a user-attachments URL that renders as an inline player — the video
-never enters repo history. Delete this comment afterwards.
-The recordings live untracked at docs/demo.mp4 (compressed) and docs/demo.gif (original). -->
+
+
+https://github.com/user-attachments/assets/b39c0dc0-7f2f-4a2d-b340-1ab8d0e4c2aa
 
 
 
-
-
-**What the clip shows:** ~200 sprites at ~150 fps in the **iOS Simulator** (iPhone 17 Pro Max, iOS 26.5) hosted on an M2 MacBook Air (2022, 16 GB) — so those numbers reflect Mac hardware with an uncapped frame rate, not phone performance. On a physical device the engine has held 500+ sprites at 60 fps, measured informally via the overlay; a proper benchmark suite is on the roadmap.
+**What the clip shows:** ~200 sprites at ~150 fps in the **iOS Simulator** (iPhone 17 Pro Max, iOS 26.5) hosted on an M2 MacBook Air (2022, 16 GB) — so those numbers reflect Mac hardware with an uncapped frame rate, not phone performance. A proper benchmark suite is on the roadmap.
 
 The demo is a stress test, not a game: bouncing sprites with gravity, wall bounce, and naive O(n²) collision, plus touch input — fingers act as physical colliders you can bat sprites around with. A live perf overlay reports frame rate and `step()` time, with buttons to add/remove sprites at runtime.
 
