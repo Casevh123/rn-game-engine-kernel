@@ -12,7 +12,7 @@ import {
     useFrameCallback,
     runOnJS,
 } from 'react-native-reanimated';
-import {createFlatWorld, createSpritePool, SpriteAtlasLookup} from '@engine/kernel';
+import {createFlatWorld, createComponentPool, SpriteAtlasLookup} from '@engine/kernel';
 import {createSpriteAtlasLookup, FRAME_SIZE} from './sprites';
 
 // ─── Configuration ─────────────────────────────────────────────────────────
@@ -22,6 +22,11 @@ const MAX_SPRITES = 1024;
 const INITIAL_SPRITE_COUNT = 100;
 const NUM_SPRITE_TYPES = 4;
 const PERF_SAMPLE_INTERVAL = 60; // frames between stat reports
+
+// Rendered sprite size must match the physics collision diameter —
+// frames are 256px in the atlas, scaled down to SPRITE_SIZE on screen.
+const SPRITE_SIZE = 24;
+const SPRITE_SCALE = SPRITE_SIZE / FRAME_SIZE;
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -76,9 +81,8 @@ export function GameScreen() {
         // ── Bootstrap engine (runs once) ──
         if (!g[ENGINE_ID] && initialized.value) {
             const world = createFlatWorld(MAX_NODES);
-            const { pool: spritePool, spriteType } = createSpritePool(world, MAX_SPRITES);
-            world.registerPool(spritePool);
 
+            const spriteType = new Int32Array(MAX_SPRITES);
             const vx = new Float32Array(MAX_SPRITES);
             const vy = new Float32Array(MAX_SPRITES);
 
@@ -86,9 +90,21 @@ export function GameScreen() {
             const px = new Float32Array(MAX_SPRITES);
             const py = new Float32Array(MAX_SPRITES);
 
+            // Swap-and-pop callback: every array indexed by component index
+            // must be swapped here, or non-tail removals desync the columns.
+            const spritePool = createComponentPool(world, MAX_SPRITES, (a: number, b: number) => {
+                'worklet';
+                const tmpType = spriteType[a]; spriteType[a] = spriteType[b]; spriteType[b] = tmpType;
+                let tmp = vx[a]; vx[a] = vx[b]; vx[b] = tmp;
+                tmp = vy[a]; vy[a] = vy[b]; vy[b] = tmp;
+                tmp = px[a]; px[a] = px[b]; px[b] = tmp;
+                tmp = py[a]; py[a] = py[b]; py[b] = tmp;
+            });
+            world.registerPool(spritePool);
+
             const GRAVITY = 980;       // px/s²
             const RESTITUTION = 0.8;   // bounce damping
-            const RADIUS = 12;         // collision radius per sprite
+            const RADIUS = SPRITE_SIZE / 2;  // collision radius = visual radius
             const DIAMETER = RADIUS * 2;
             const DIAMETER_SQ = DIAMETER * DIAMETER;
 
@@ -194,7 +210,7 @@ export function GameScreen() {
                 world.attach(node, root);
                 const compIdx = spritePool.add(node);
                 spriteType[compIdx] = i % NUM_SPRITE_TYPES;
-                world.setLocalPosition(node, Math.random() * SCREEN_W, Math.random() * SCREEN_H);
+                world.setLocalTransform(node, SPRITE_SCALE, 0, Math.random() * SCREEN_W, Math.random() * SCREEN_H);
                 vx[compIdx] = (Math.random() - 0.5) * 300;
                 vy[compIdx] = (Math.random() - 0.5) * 300;
                 handles.push(node);
@@ -232,7 +248,7 @@ export function GameScreen() {
                 engine.world.attach(node, engine.root);
                 const compIdx = engine.spritePool.add(node);
                 engine.spriteType[compIdx] = (current + i) % NUM_SPRITE_TYPES;
-                engine.world.setLocalPosition(node, Math.random() * SCREEN_W, Math.random() * SCREEN_H);
+                engine.world.setLocalTransform(node, SPRITE_SCALE, 0, Math.random() * SCREEN_W, Math.random() * SCREEN_H);
                 engine.vx[compIdx] = (Math.random() - 0.5) * 300;
                 engine.vy[compIdx] = (Math.random() - 0.5) * 300;
                 engine.handles.push(node);
