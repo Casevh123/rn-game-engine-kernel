@@ -43,7 +43,7 @@ Other deliberate constraints: fixed world capacity (no paging/growth), uniform-s
 
 ### Kernel — solid core, known debts
 
-**Built and tested (258 tests, 13 suites):** SoA storage with intrusive free-list · generational handles · scene graph with O(1) attach/detach/reparent and iterative destroy · worldEnabled invariant (enabled ∧ ancestors-enabled ∧ root-reachable, per [NewWorldInvariant.md](packages/kernel/NewWorldInvariant.md)) enforced across all mutations · sparse-set component pools with swap-and-pop · deferred command buffer with step guards · RSXform transform propagation · atlas-aware render collection with pivot correction · two-buffer touch input (raw `TouchEventBuffer` → cooked `TouchState`, begin/end frame systems, per [TouchSpec.md](packages/kernel/TouchSpec.md)).
+**Built and tested (258 tests, 13 suites):** SoA storage with intrusive free-list · generational handles · scene graph with O(1) attach/detach/reparent and iterative destroy · worldEnabled invariant (enabled ∧ ancestors-enabled ∧ root-reachable, per [NewWorldInvariant.md](packages/kernel/working_docs/NewWorldInvariant.md)) enforced across all mutations · sparse-set component pools with swap-and-pop · deferred command buffer with step guards · RSXform transform propagation · atlas-aware render collection with pivot correction · two-buffer touch input (raw `TouchEventBuffer` → cooked `TouchState`, begin/end frame systems, per [TouchSpec.md](packages/kernel/working_docs/TouchSpec.md)).
 
 **Known debts (Phase 0–1 of todo.md):**
 - Component pools swap only the columns their author remembered — parallel user columns silently desync on non-tail removal. The single latent-corruption bug in the design.
@@ -76,8 +76,8 @@ ENGINE_DIFF.md (AI-generated review scaffolding) has been deleted; its verified 
 | Product direction, current state | this file |
 | What to do next, in order | [todo.md](todo.md) |
 | Kernel model, axioms, contracts | [packages/kernel/SPEC.md](packages/kernel/SPEC.md) |
-| worldEnabled invariant | [packages/kernel/NewWorldInvariant.md](packages/kernel/NewWorldInvariant.md) |
-| Touch input contract | [packages/kernel/TouchSpec.md](packages/kernel/TouchSpec.md) |
+| worldEnabled invariant | [packages/kernel/working_docs/NewWorldInvariant.md](packages/kernel/working_docs/NewWorldInvariant.md) |
+| Touch input contract | [packages/kernel/working_docs/TouchSpec.md](packages/kernel/working_docs/TouchSpec.md) |
 | RN bridge contracts | [packages/react-native/SPEC.md](packages/react-native/SPEC.md) (rewrite scheduled, todo 3.6) |
 | Historical decisions | [docs/](docs/) |
 
@@ -103,7 +103,7 @@ ENGINE_DIFF.md (AI-generated review scaffolding) has been deleted; its verified 
 | Kernel architecture | Closure factories, zero classes (worklet serialization) |
 | Storage | SoA TypedArray columns, fixed capacity, intrusive free-list |
 | Transforms | RSXform `(a,b,tx,ty)`, trig-free composition, 1:1 with Skia |
-| worldEnabled semantics | enabled ∧ all-ancestors-enabled ∧ root-reachable ([NewWorldInvariant.md](packages/kernel/NewWorldInvariant.md)) |
+| worldEnabled semantics | enabled ∧ all-ancestors-enabled ∧ root-reachable ([NewWorldInvariant.md](packages/kernel/working_docs/NewWorldInvariant.md)) |
 | Input design | Two-buffer: raw event buffer (producer-written) → cooked per-frame state, begin/end bookend systems, per-frame boolean phase flags (not a phase enum) |
 | React scene API | Imperative first; reconciler deferred until after the sample game ships |
 | Zero-GC | Demoted from headline claim to measured hygiene |
