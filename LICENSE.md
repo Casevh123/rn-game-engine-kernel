@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2027 Case Van Houwelingen
+Copyright (c) 2026 Case Van Houwelingen
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
