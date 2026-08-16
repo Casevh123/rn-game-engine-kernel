@@ -1,9 +1,9 @@
 import { createFlatWorld } from "../FlatWorld";
-import { createTouchBuffer } from "../touchBuffer";
+import { createTouchAccumulator } from "../touchAccumulator";
 import { createTouchState } from "../touchState";
 import { createBeginInputFrame } from "../beginInputFrame";
 import { createEndInputFrame } from "../endInputFrame";
-import {FlatWorld, System, TouchEventBuffer, TouchState} from "../types";
+import {FlatWorld, System, TouchInputAccumulator, TouchState} from "../types";
 import {findInBuffer, writeTouchCancel, writeTouchDown, writeTouchMove, writeTouchUp} from "../touchProducerInterface";
 import {MAX_TOUCHES} from "../constants";
 
@@ -16,15 +16,15 @@ describe("producer interface tests", () => {
      */
     it("writeTouchDown uses the first available slot", () => {
         //Arrange
-        const buffer: TouchEventBuffer = createTouchBuffer();
+        const accumulator: TouchInputAccumulator = createTouchAccumulator();
 
         // Act
-        writeTouchDown(buffer, 1, 0, 0);
-        writeTouchDown(buffer, 2, 0, 0);
+        writeTouchDown(accumulator, 1, 0, 0);
+        writeTouchDown(accumulator, 2, 0, 0);
 
         // Assert
-        expect(buffer.touchId[0]).toEqual(1);
-        expect(buffer.touchId[1]).toEqual(2);
+        expect(accumulator.touchId[0]).toEqual(1);
+        expect(accumulator.touchId[1]).toEqual(2);
     });
 
     /*
@@ -33,21 +33,21 @@ describe("producer interface tests", () => {
      */
     it("writeTouchDown records begin facts without requiring a frame step", () => {
         // Arrange
-        const buffer: TouchEventBuffer = createTouchBuffer();
+        const accumulator: TouchInputAccumulator = createTouchAccumulator();
 
         // Act
-        writeTouchDown(buffer, 1, 10, 20);
+        writeTouchDown(accumulator, 1, 10, 20);
 
         // Assert
-        expect(buffer.touchId[0]).toBe(1);
-        expect(buffer.touchX[0]).toBe(10);
-        expect(buffer.touchY[0]).toBe(20);
-        expect(buffer.beginX[0]).toBe(10);
-        expect(buffer.beginY[0]).toBe(20);
-        expect(buffer.beganThisFrame[0]).toBe(1);
-        expect(buffer.movedThisFrame[0]).toBe(0);
-        expect(buffer.endedThisFrame[0]).toBe(0);
-        expect(buffer.canceledThisFrame[0]).toBe(0);
+        expect(accumulator.touchId[0]).toBe(1);
+        expect(accumulator.touchX[0]).toBe(10);
+        expect(accumulator.touchY[0]).toBe(20);
+        expect(accumulator.beginX[0]).toBe(10);
+        expect(accumulator.beginY[0]).toBe(20);
+        expect(accumulator.beganSinceConsume[0]).toBe(1);
+        expect(accumulator.movedSinceConsume[0]).toBe(0);
+        expect(accumulator.endedSinceConsume[0]).toBe(0);
+        expect(accumulator.canceledSinceConsume[0]).toBe(0);
     });
 
     /*
@@ -56,14 +56,14 @@ describe("producer interface tests", () => {
      */
     it("writeTouchDown throws or fails when MAX_TOUCHES is exceeded", () => {
         // Arrange
-        const buffer: TouchEventBuffer = createTouchBuffer();
+        const accumulator: TouchInputAccumulator = createTouchAccumulator();
 
         for (let i: number = 0; i < MAX_TOUCHES; i++) {
-            writeTouchDown(buffer, i, 0, 0);
+            writeTouchDown(accumulator, i, 0, 0);
         }
 
         // Act & Assert
-        expect(() => {writeTouchDown(buffer, MAX_TOUCHES, 10, 20)}).toThrow(`Exceeded MAX_TOUCHES: ${MAX_TOUCHES}`);
+        expect(() => {writeTouchDown(accumulator, MAX_TOUCHES, 10, 20)}).toThrow(`Exceeded MAX_TOUCHES: ${MAX_TOUCHES}`);
     });
 
     /*
@@ -72,11 +72,11 @@ describe("producer interface tests", () => {
      */
     it("findTouchSlot returns the correct slot for an existing touch id", () => {
         // Arrange
-        const buffer: TouchEventBuffer = createTouchBuffer();
-        buffer.touchId[3] = 12; // Assume 3 < MAX_TOUCHES
+        const accumulator: TouchInputAccumulator = createTouchAccumulator();
+        accumulator.touchId[3] = 12; // Assume 3 < MAX_TOUCHES
 
         // Act
-        const index: number = findInBuffer(buffer, 12);
+        const index: number = findInBuffer(accumulator, 12);
 
         // Assert
         expect(index).toBe(3);
@@ -88,13 +88,13 @@ describe("producer interface tests", () => {
      */
     it("findTouchSlot returns -1 for a missing touch id", () => {
         // Arrange
-        const buffer: TouchEventBuffer = createTouchBuffer();
+        const accumulator: TouchInputAccumulator = createTouchAccumulator();
         for (let i: number = 0; i < MAX_TOUCHES; i++) {
-            buffer.touchId[i] = i;
+            accumulator.touchId[i] = i;
         }
 
         // Act
-        const index: number = findInBuffer(buffer, MAX_TOUCHES);
+        const index: number = findInBuffer(accumulator, MAX_TOUCHES);
 
         // Assert
         expect(index).toBe(-1);
@@ -107,21 +107,21 @@ describe("producer interface tests", () => {
     it("writeTouchMove updates latest position and preserves begin facts", () => {
 
         // Arrange
-        const buffer: TouchEventBuffer = createTouchBuffer();
-        writeTouchDown(buffer, 1, 10, 10);
+        const accumulator: TouchInputAccumulator = createTouchAccumulator();
+        writeTouchDown(accumulator, 1, 10, 10);
 
         // Act
-        writeTouchMove(buffer, 1, 30, 40);
+        writeTouchMove(accumulator, 1, 30, 40);
 
         // Assert
-        expect(buffer.touchX[0]).toBe(30);
-        expect(buffer.touchY[0]).toBe(40);
-        expect(buffer.beginX[0]).toBe(10);
-        expect(buffer.beginY[0]).toBe(10);
-        expect(buffer.beganThisFrame[0]).toBe(1);
-        expect(buffer.movedThisFrame[0]).toBe(1);
-        expect(buffer.endedThisFrame[0]).toBe(0);
-        expect(buffer.canceledThisFrame[0]).toBe(0);
+        expect(accumulator.touchX[0]).toBe(30);
+        expect(accumulator.touchY[0]).toBe(40);
+        expect(accumulator.beginX[0]).toBe(10);
+        expect(accumulator.beginY[0]).toBe(10);
+        expect(accumulator.beganSinceConsume[0]).toBe(1);
+        expect(accumulator.movedSinceConsume[0]).toBe(1);
+        expect(accumulator.endedSinceConsume[0]).toBe(0);
+        expect(accumulator.canceledSinceConsume[0]).toBe(0);
     });
 
     /*
@@ -131,10 +131,10 @@ describe("producer interface tests", () => {
     it("writeTouchMove throws or fails when the touch id is unknown", () => {
         // Arrange
         const randomId: number = 10;
-        const buffer: TouchEventBuffer = createTouchBuffer();
+        const accumulator: TouchInputAccumulator = createTouchAccumulator();
 
         // Act & Assert
-        expect(() => {writeTouchMove(buffer, randomId, 0, 0)}).toThrow(`Touch with ID: ${randomId} does not exist`);
+        expect(() => {writeTouchMove(accumulator, randomId, 0, 0)}).toThrow(`Touch with ID: ${randomId} does not exist`);
     });
 
     /*
@@ -143,22 +143,22 @@ describe("producer interface tests", () => {
      */
     it("writeTouchUp updates latest position and preserves prior frame facts", () => {
         // Arrange
-        const buffer: TouchEventBuffer = createTouchBuffer();
-        writeTouchDown(buffer, 1, 10, 10);
-        writeTouchMove(buffer, 1, 20, 20);
+        const accumulator: TouchInputAccumulator = createTouchAccumulator();
+        writeTouchDown(accumulator, 1, 10, 10);
+        writeTouchMove(accumulator, 1, 20, 20);
 
         // Act
-        writeTouchUp(buffer, 1, 30, 30);
+        writeTouchUp(accumulator, 1, 30, 30);
 
         // Assert
-        expect(buffer.touchX[0]).toBe(30);
-        expect(buffer.touchY[0]).toBe(30);
-        expect(buffer.beginX[0]).toBe(10);
-        expect(buffer.beginY[0]).toBe(10);
-        expect(buffer.beganThisFrame[0]).toBe(1);
-        expect(buffer.movedThisFrame[0]).toBe(1);
-        expect(buffer.endedThisFrame[0]).toBe(1);
-        expect(buffer.canceledThisFrame[0]).toBe(0);
+        expect(accumulator.touchX[0]).toBe(30);
+        expect(accumulator.touchY[0]).toBe(30);
+        expect(accumulator.beginX[0]).toBe(10);
+        expect(accumulator.beginY[0]).toBe(10);
+        expect(accumulator.beganSinceConsume[0]).toBe(1);
+        expect(accumulator.movedSinceConsume[0]).toBe(1);
+        expect(accumulator.endedSinceConsume[0]).toBe(1);
+        expect(accumulator.canceledSinceConsume[0]).toBe(0);
     });
 
     /*
@@ -168,10 +168,10 @@ describe("producer interface tests", () => {
     it("writeTouchUp throws or fails when the touch id is unknown", () => {
         // Arrange
         const randomId: number = 10;
-        const buffer: TouchEventBuffer = createTouchBuffer();
+        const accumulator: TouchInputAccumulator = createTouchAccumulator();
 
         // Act & Assert
-        expect(() => {writeTouchUp(buffer, randomId, 10, 10)}).toThrow(`Touch with ID: ${randomId} does not exist`)
+        expect(() => {writeTouchUp(accumulator, randomId, 10, 10)}).toThrow(`Touch with ID: ${randomId} does not exist`)
     });
 
     /*
@@ -180,18 +180,18 @@ describe("producer interface tests", () => {
      */
     it("writeTouchCancel marks cancellation without clearing the slot", () => {
         // Arrange
-        const buffer: TouchEventBuffer = createTouchBuffer();
-        writeTouchDown(buffer, 1, 10, 10);
+        const accumulator: TouchInputAccumulator = createTouchAccumulator();
+        writeTouchDown(accumulator, 1, 10, 10);
 
         // Act
-        writeTouchCancel(buffer, 1);
+        writeTouchCancel(accumulator, 1);
 
         // Assert
-        expect(buffer.canceledThisFrame[0]).toBe(1);
-        expect(buffer.touchId[0]).not.toBe(-1);
-        expect(buffer.beganThisFrame[0]).toBe(1);
-        expect(buffer.movedThisFrame[0]).toBe(0);
-        expect(buffer.endedThisFrame[0]).toBe(0);
+        expect(accumulator.canceledSinceConsume[0]).toBe(1);
+        expect(accumulator.touchId[0]).not.toBe(-1);
+        expect(accumulator.beganSinceConsume[0]).toBe(1);
+        expect(accumulator.movedSinceConsume[0]).toBe(0);
+        expect(accumulator.endedSinceConsume[0]).toBe(0);
     });
 
     /*
@@ -201,10 +201,10 @@ describe("producer interface tests", () => {
     it("writeTouchCancel throws or fails when the touch id is unknown", () => {
         // Arrange
         const randomId: number = 10;
-        const buffer: TouchEventBuffer = createTouchBuffer();
+        const accumulator: TouchInputAccumulator = createTouchAccumulator();
 
         // Act & Assert
-        expect(() => {writeTouchCancel(buffer, randomId)}).toThrow(`Touch with ID: ${randomId} does not exist`);
+        expect(() => {writeTouchCancel(accumulator, randomId)}).toThrow(`Touch with ID: ${randomId} does not exist`);
     });
 });
 
@@ -215,13 +215,13 @@ describe("frame boundary tests", () => {
      */
     it("beginInputFrame initializes state for a newly began touch", () => {
         // Arrange
-        const buffer: TouchEventBuffer = createTouchBuffer();
+        const accumulator: TouchInputAccumulator = createTouchAccumulator();
         const state: TouchState = createTouchState();
         const world: FlatWorld = createFlatWorld(1000);
         world.step(12.5); // set world time to 12.5
-        const beginInputFrame: System = createBeginInputFrame(buffer, state);
+        const beginInputFrame: System = createBeginInputFrame(accumulator, state);
 
-        writeTouchDown(buffer, 1, 10, 10);
+        writeTouchDown(accumulator, 1, 10, 10);
 
         // Act
         beginInputFrame(world, 0);
@@ -236,10 +236,10 @@ describe("frame boundary tests", () => {
         expect(state.prevX[0]).toBe(10);
         expect(state.prevY[0]).toBe(10);
         expect(state.visibleTouchCount).toBe(1);
-        expect(state.beganThisFrame[0]).toBe(1);
-        expect(state.movedThisFrame[0]).toBe(0);
-        expect(state.endedThisFrame [0]).toBe(0);
-        expect(state.canceledThisFrame[0]).toBe(0);
+        expect(state.beganThisTick[0]).toBe(1);
+        expect(state.movedThisTick[0]).toBe(0);
+        expect(state.endedThisTick [0]).toBe(0);
+        expect(state.canceledThisTick[0]).toBe(0);
     });
 
     /*
@@ -248,16 +248,16 @@ describe("frame boundary tests", () => {
      */
     it("beginInputFrame rolls existing current position into prev before copying latest position", () => {
         // Arrange
-        const buffer: TouchEventBuffer = createTouchBuffer();
+        const accumulator: TouchInputAccumulator = createTouchAccumulator();
         const state: TouchState = createTouchState();
         state.touchX[0] = 10;
         state.touchY[0] = 10;
-        buffer.touchId[0] = 1;
-        buffer.touchX[0] = 20;
-        buffer.touchY[0] = 20
+        accumulator.touchId[0] = 1;
+        accumulator.touchX[0] = 20;
+        accumulator.touchY[0] = 20
 
         const world: FlatWorld = createFlatWorld(1000);
-        const beginInputFrame: System = createBeginInputFrame(buffer, state);
+        const beginInputFrame: System = createBeginInputFrame(accumulator, state);
 
         // Act
         beginInputFrame(world, 0);
@@ -271,55 +271,55 @@ describe("frame boundary tests", () => {
 
     /*
      * Purpose:
-     *   Gameplay reads a frozen snapshot from TouchState, not the producer buffer.
+     *   Gameplay reads a frozen snapshot from TouchState, not the producer accumulator.
      */
-    it("beginInputFrame copies frame flags from buffer into state", () => {
+    it("beginInputFrame copies frame flags from accumulator into state", () => {
         // Arrange
         const beganThisFrame: number = Math.random() >= 0.5 ? 0 : 1;
         const movedThisFrame: number = Math.random() >= 0.5 ? 0 : 1;
         const endedThisFrame: number = Math.random() >= 0.5 ? 0 : 1;
         const canceledThisFrame: number = (Math.random() >= 0.5 || endedThisFrame == 1) ? 0 : 1;
 
-        const buffer: TouchEventBuffer = createTouchBuffer();
+        const accumulator: TouchInputAccumulator = createTouchAccumulator();
         const state: TouchState = createTouchState();
-        buffer.touchId[0] = 1;
-        buffer.beganThisFrame[0] = beganThisFrame;
-        buffer.movedThisFrame[0] = movedThisFrame;
-        buffer.endedThisFrame[0] = endedThisFrame;
-        buffer.canceledThisFrame[0] = canceledThisFrame;
+        accumulator.touchId[0] = 1;
+        accumulator.beganSinceConsume[0] = beganThisFrame;
+        accumulator.movedSinceConsume[0] = movedThisFrame;
+        accumulator.endedSinceConsume[0] = endedThisFrame;
+        accumulator.canceledSinceConsume[0] = canceledThisFrame;
 
         const world: FlatWorld = createFlatWorld(1000);
-        const beginInputFrame: System = createBeginInputFrame(buffer, state);
+        const beginInputFrame: System = createBeginInputFrame(accumulator, state);
 
         // Act
         beginInputFrame(world, 0);
 
         // Assert
-        expect(state.beganThisFrame[0]).toBe(beganThisFrame);
-        expect(state.movedThisFrame[0]).toBe(movedThisFrame);
-        expect(state.endedThisFrame[0]).toBe(endedThisFrame);
-        expect(state.canceledThisFrame[0]).toBe(canceledThisFrame);
+        expect(state.beganThisTick[0]).toBe(beganThisFrame);
+        expect(state.movedThisTick[0]).toBe(movedThisFrame);
+        expect(state.endedThisTick[0]).toBe(endedThisFrame);
+        expect(state.canceledThisTick[0]).toBe(canceledThisFrame);
     });
 
     /*
      * Purpose:
      *   Empty producer slots do not create phantom touches.
      */
-    it("beginInputFrame ignores empty buffer slots", () => {
+    it("beginInputFrame ignores empty accumulator slots", () => {
         // Arrange
-        const buffer: TouchEventBuffer = createTouchBuffer();
+        const accumulator: TouchInputAccumulator = createTouchAccumulator();
         const state: TouchState = createTouchState();
-        buffer.touchX[0] = 10;
-        buffer.touchY[0] = 10;
-        buffer.beginX[0] = 20;
-        buffer.beginY[0] = 20;
-        buffer.beganThisFrame[0] = 1;
-        buffer.movedThisFrame[0] = 1;
-        buffer.endedThisFrame[0] = 1;
-        buffer.touchId[0] = -1;
+        accumulator.touchX[0] = 10;
+        accumulator.touchY[0] = 10;
+        accumulator.beginX[0] = 20;
+        accumulator.beginY[0] = 20;
+        accumulator.beganSinceConsume[0] = 1;
+        accumulator.movedSinceConsume[0] = 1;
+        accumulator.endedSinceConsume[0] = 1;
+        accumulator.touchId[0] = -1;
 
         const world: FlatWorld = createFlatWorld(1000);
-        const beginInputFrame: System = createBeginInputFrame(buffer, state);
+        const beginInputFrame: System = createBeginInputFrame(accumulator, state);
 
         // Act
         beginInputFrame(world, 0);
@@ -333,10 +333,10 @@ describe("frame boundary tests", () => {
         expect(state.touchY[0]).toBe(0);
         expect(state.prevX[0]).toBe(0);
         expect(state.prevY[0]).toBe(0);
-        expect(state.beganThisFrame[0]).toBe(0);
-        expect(state.movedThisFrame[0]).toBe(0);
-        expect(state.endedThisFrame [0]).toBe(0);
-        expect(state.canceledThisFrame[0]).toBe(0);
+        expect(state.beganThisTick[0]).toBe(0);
+        expect(state.movedThisTick[0]).toBe(0);
+        expect(state.endedThisTick [0]).toBe(0);
+        expect(state.canceledThisTick[0]).toBe(0);
     });
 
     /*
@@ -345,23 +345,23 @@ describe("frame boundary tests", () => {
      */
     it("endInputFrame clears only transient flags for unfinished touches", () => {
         // Arrange
-        const buffer: TouchEventBuffer = createTouchBuffer();
+        const accumulator: TouchInputAccumulator = createTouchAccumulator();
         const state: TouchState = createTouchState();
-        buffer.touchId[0] = 1;
-        buffer.beganThisFrame[0] = 1;
-        buffer.movedThisFrame[0] = 1;
+        accumulator.touchId[0] = 1;
+        accumulator.beganSinceConsume[0] = 1;
+        accumulator.movedSinceConsume[0] = 1;
         state.touchVisible[0] = 1;
         state.visibleTouchCount = 1;
 
         const world: FlatWorld = createFlatWorld(1000);
-        const endInputFrame: System = createEndInputFrame(buffer, state);
+        const endInputFrame: System = createEndInputFrame(accumulator, state);
 
         // Act
         endInputFrame(world, 0);
 
         // Assert
-        expect(buffer.beganThisFrame[0]).toBe(0);
-        expect(buffer.movedThisFrame[0]).toBe(0);
+        expect(accumulator.beganSinceConsume[0]).toBe(0);
+        expect(accumulator.movedSinceConsume[0]).toBe(0);
         expect(state.touchVisible[0]).toBe(1);
         expect(state.visibleTouchCount).toBe(1);
     });
@@ -370,12 +370,12 @@ describe("frame boundary tests", () => {
      * Purpose:
      *   Normal release is consumed after one visible frame.
      */
-    it("endInputFrame clears buffer and state for ended touches", () => {
+    it("endInputFrame clears accumulator and state for ended touches", () => {
         // Arrange
-        const buffer: TouchEventBuffer = createTouchBuffer();
+        const accumulator: TouchInputAccumulator = createTouchAccumulator();
         const state: TouchState = createTouchState();
-        buffer.touchId[0] = 1;
-        buffer.endedThisFrame[0] = 1;
+        accumulator.touchId[0] = 1;
+        accumulator.endedSinceConsume[0] = 1;
         state.touchVisible[0] = 1;
         state.visibleTouchCount = 1;
         state.touchX[0] = 10;
@@ -384,26 +384,26 @@ describe("frame boundary tests", () => {
         state.prevY[0] = 20;
         state.startX[0] = 30;
         state.startY[0] = 30;
-        state.beganThisFrame[0] = 1;
-        state.movedThisFrame[0] = 1;
+        state.beganThisTick[0] = 1;
+        state.movedThisTick[0] = 1;
 
         const world: FlatWorld = createFlatWorld(1000);
-        const endInputFrame: System = createEndInputFrame(buffer, state);
+        const endInputFrame: System = createEndInputFrame(accumulator, state);
 
         // Act
         endInputFrame(world, 0);
 
         // Assert
-        expect(buffer.touchId[0]).toBe(-1);
+        expect(accumulator.touchId[0]).toBe(-1);
         expect(state.touchVisible[0]).toBe(0);
         expect(state.visibleTouchCount).toBe(0);
         expect(state.startX[0]).toBe(0);
         expect(state.startY[0]).toBe(0);
         expect(state.prevX[0]).toBe(0);
         expect(state.prevY[0]).toBe(0);
-        expect(state.beganThisFrame[0]).toBe(0);
-        expect(state.movedThisFrame[0]).toBe(0);
-        expect(state.endedThisFrame[0]).toBe(0);
+        expect(state.beganThisTick[0]).toBe(0);
+        expect(state.movedThisTick[0]).toBe(0);
+        expect(state.endedThisTick[0]).toBe(0);
         expect(state.touchX[0]).toBe(0);
         expect(state.touchY[0]).toBe(0);
     });
@@ -412,12 +412,12 @@ describe("frame boundary tests", () => {
      * Purpose:
      *   Canceled touches use the same cleanup path as ended touches.
      */
-    it("endInputFrame clears buffer and state for canceled touches", () => {
+    it("endInputFrame clears accumulator and state for canceled touches", () => {
         // Arrange
-        const buffer: TouchEventBuffer = createTouchBuffer();
+        const accumulator: TouchInputAccumulator = createTouchAccumulator();
         const state: TouchState = createTouchState();
-        buffer.touchId[0] = 1;
-        buffer.canceledThisFrame[0] = 1;
+        accumulator.touchId[0] = 1;
+        accumulator.canceledSinceConsume[0] = 1;
         state.touchVisible[0] = 1;
         state.visibleTouchCount = 1;
         state.touchX[0] = 10;
@@ -426,26 +426,26 @@ describe("frame boundary tests", () => {
         state.prevY[0] = 20;
         state.startX[0] = 30;
         state.startY[0] = 30;
-        state.beganThisFrame[0] = 1;
-        state.movedThisFrame[0] = 1;
+        state.beganThisTick[0] = 1;
+        state.movedThisTick[0] = 1;
 
         const world: FlatWorld = createFlatWorld(1000);
-        const endInputFrame: System = createEndInputFrame(buffer, state);
+        const endInputFrame: System = createEndInputFrame(accumulator, state);
 
         // Act
         endInputFrame(world, 0);
 
         // Assert
-        expect(buffer.touchId[0]).toBe(-1);
+        expect(accumulator.touchId[0]).toBe(-1);
         expect(state.touchVisible[0]).toBe(0);
         expect(state.visibleTouchCount).toBe(0);
         expect(state.startX[0]).toBe(0);
         expect(state.startY[0]).toBe(0);
         expect(state.prevX[0]).toBe(0);
         expect(state.prevY[0]).toBe(0);
-        expect(state.beganThisFrame[0]).toBe(0);
-        expect(state.movedThisFrame[0]).toBe(0);
-        expect(state.canceledThisFrame[0]).toBe(0);
+        expect(state.beganThisTick[0]).toBe(0);
+        expect(state.movedThisTick[0]).toBe(0);
+        expect(state.canceledThisTick[0]).toBe(0);
         expect(state.touchX[0]).toBe(0);
         expect(state.touchY[0]).toBe(0)
     });
@@ -456,15 +456,15 @@ describe("frame boundary tests", () => {
      */
     it("endInputFrame does not make visibleTouchCount negative when called repeatedly", () => {
         // Arrange
-        const buffer: TouchEventBuffer = createTouchBuffer();
+        const accumulator: TouchInputAccumulator = createTouchAccumulator();
         const state: TouchState = createTouchState();
-        buffer.touchId[0] = 1;
-        buffer.endedThisFrame[0] = 1;
+        accumulator.touchId[0] = 1;
+        accumulator.endedSinceConsume[0] = 1;
         state.touchVisible[0] = 1;
         state.visibleTouchCount = 1;
 
         const world: FlatWorld = createFlatWorld(1000);
-        const endInputFrame: System = createEndInputFrame(buffer, state);
+        const endInputFrame: System = createEndInputFrame(accumulator, state);
 
         // Act
         endInputFrame(world, 0);
@@ -479,15 +479,15 @@ describe("integration invariant tests", () => {
     let world: FlatWorld;
     let beginInputFrame: System;
     let endInputFrame: System;
-    let buffer: TouchEventBuffer;
+    let accumulator: TouchInputAccumulator;
     let state: TouchState;
 
     beforeEach(() => {
         world = createFlatWorld(1000);
-        buffer = createTouchBuffer();
+        accumulator = createTouchAccumulator();
         state = createTouchState();
-        beginInputFrame = createBeginInputFrame(buffer, state);
-        endInputFrame = createEndInputFrame(buffer, state);
+        beginInputFrame = createBeginInputFrame(accumulator, state);
+        endInputFrame = createEndInputFrame(accumulator, state);
     })
 
     /*
@@ -497,16 +497,16 @@ describe("integration invariant tests", () => {
     it("begin and end in the same frame are both visible to the kernel", () => {
         // Arrange
         const id: number = 4;
-        writeTouchDown(buffer, id, 10, 10);
-        writeTouchUp(buffer, id, 10, 10);
+        writeTouchDown(accumulator, id, 10, 10);
+        writeTouchUp(accumulator, id, 10, 10);
 
         // Act #1
         beginInputFrame(world, 0);
 
         // Assert #1
-        const slot: number = findInBuffer(buffer, id)
-        expect(state.beganThisFrame[slot]).toBe(1);
-        expect(state.endedThisFrame[slot]).toBe(1);
+        const slot: number = findInBuffer(accumulator, id)
+        expect(state.beganThisTick[slot]).toBe(1);
+        expect(state.endedThisTick[slot]).toBe(1);
         expect(state.touchVisible[slot]).toBe(1);
         expect(state.visibleTouchCount).toBe(1);
         expect(state.startX[0]).toBe(10);
@@ -518,7 +518,7 @@ describe("integration invariant tests", () => {
         endInputFrame(world, 0);
 
         // Assert #2
-        expect(buffer.touchId[slot]).toBe(-1);
+        expect(accumulator.touchId[slot]).toBe(-1);
         expect(state.touchVisible[slot]).toBe(0);
         expect(state.visibleTouchCount).toBe(0);
     });
@@ -530,18 +530,18 @@ describe("integration invariant tests", () => {
     it("begin, move, and end in the same frame preserve all facts", () => {
         // Arrange
         const id: number = 4;
-        writeTouchDown(buffer, id, 10, 10);
-        writeTouchMove(buffer, id, 30, 20);
-        writeTouchUp(buffer, id, 50, 40);
+        writeTouchDown(accumulator, id, 10, 10);
+        writeTouchMove(accumulator, id, 30, 20);
+        writeTouchUp(accumulator, id, 50, 40);
 
         // Act
         beginInputFrame(world, 0);
 
         // Assert
-        const slot: number = findInBuffer(buffer, id);
-        expect(state.beganThisFrame[slot]).toBe(1);
-        expect(state.movedThisFrame[slot]).toBe(1);
-        expect(state.endedThisFrame[slot]).toBe(1);
+        const slot: number = findInBuffer(accumulator, id);
+        expect(state.beganThisTick[slot]).toBe(1);
+        expect(state.movedThisTick[slot]).toBe(1);
+        expect(state.endedThisTick[slot]).toBe(1);
         expect(state.startX[slot]).toBe(10);
         expect(state.startY[slot]).toBe(10);
         expect(state.touchX[slot]).toBe(50);
@@ -557,14 +557,14 @@ describe("integration invariant tests", () => {
     it("new touches have zero frame delta but preserve drag delta", () => {
         // Arrange
         const id: number = 4;
-        writeTouchDown(buffer, id, 10, 10);
-        writeTouchMove(buffer, id, 30, 25);
+        writeTouchDown(accumulator, id, 10, 10);
+        writeTouchMove(accumulator, id, 30, 25);
 
         // Act
         beginInputFrame(world, 0);
 
         // Assert
-        const slot: number = findInBuffer(buffer, id)
+        const slot: number = findInBuffer(accumulator, id)
         const frameDx: number = state.touchX[slot] - state.prevX[slot];
         const frameDy: number = state.touchY[slot] - state.prevY[slot];
         const dragDx: number = state.touchX[slot] - state.startX[slot];
@@ -583,26 +583,26 @@ describe("integration invariant tests", () => {
     it("ended touches remain visible for exactly one frame", () => {
         // Arrange
         const id: number = 4;
-        writeTouchDown(buffer, id, 10, 10);
+        writeTouchDown(accumulator, id, 10, 10);
         beginInputFrame(world, 0);
         endInputFrame(world, 0);
 
-        writeTouchUp(buffer, id, 10, 10);
+        writeTouchUp(accumulator, id, 10, 10);
 
         // Act #1
         beginInputFrame(world, 0);
 
         // Assert #1 (mid frame)
-        const slot: number = findInBuffer(buffer, id);
+        const slot: number = findInBuffer(accumulator, id);
         expect(state.touchVisible[slot]).toBe(1);
-        expect(state.endedThisFrame[slot]).toBe(1);
+        expect(state.endedThisTick[slot]).toBe(1);
 
         // Act #2
         endInputFrame(world, 0);
 
         // Assert #2
         expect(state.touchVisible[slot]).toBe(0);
-        expect(buffer.touchId[slot]).toBe(-1);
+        expect(accumulator.touchId[slot]).toBe(-1);
     });
 
     /*
@@ -612,26 +612,26 @@ describe("integration invariant tests", () => {
     it("canceled touches remain visible for exactly one frame", () => {
         // Arrange
         const id: number = 4;
-        writeTouchDown(buffer, id, 10, 10);
+        writeTouchDown(accumulator, id, 10, 10);
         beginInputFrame(world, 0);
         endInputFrame(world, 0);
 
-        writeTouchCancel(buffer, id);
+        writeTouchCancel(accumulator, id);
 
         // Act #1
         beginInputFrame(world, 0);
 
         // Assert #1 (mid frame)
-        const slot: number = findInBuffer(buffer, id);
+        const slot: number = findInBuffer(accumulator, id);
         expect(state.touchVisible[slot]).toBe(1);
-        expect(state.canceledThisFrame[slot]).toBe(1);
+        expect(state.canceledThisTick[slot]).toBe(1);
 
         // Act #2
         endInputFrame(world, 0);
 
         // Assert #2
         expect(state.touchVisible[slot]).toBe(0);
-        expect(buffer.touchId[slot]).toBe(-1);
+        expect(accumulator.touchId[slot]).toBe(-1);
     });
 
     /*
@@ -641,7 +641,7 @@ describe("integration invariant tests", () => {
     it("held stationary touches survive cleanup across frames", () => {
         // Arrange
         const id: number = 4;
-        writeTouchDown(buffer, id, 10, 10);
+        writeTouchDown(accumulator, id, 10, 10);
         beginInputFrame(world, 0);
         endInputFrame(world, 0);
 
@@ -649,16 +649,16 @@ describe("integration invariant tests", () => {
         beginInputFrame(world, 0);
 
         // Assert
-        const slot: number = findInBuffer(buffer, id);
+        const slot: number = findInBuffer(accumulator, id);
         expect(state.touchVisible[slot]).toBe(1);
-        expect(state.beganThisFrame[slot]).toBe(0);
-        expect(state.movedThisFrame[slot]).toBe(0);
-        expect(state.endedThisFrame[slot]).toBe(0);
-        expect(state.canceledThisFrame[slot]).toBe(0);
-        expect(buffer.beganThisFrame[slot]).toBe(0);
-        expect(buffer.movedThisFrame[slot]).toBe(0);
-        expect(buffer.endedThisFrame[slot]).toBe(0);
-        expect(buffer.canceledThisFrame[slot]).toBe(0);
+        expect(state.beganThisTick[slot]).toBe(0);
+        expect(state.movedThisTick[slot]).toBe(0);
+        expect(state.endedThisTick[slot]).toBe(0);
+        expect(state.canceledThisTick[slot]).toBe(0);
+        expect(accumulator.beganSinceConsume[slot]).toBe(0);
+        expect(accumulator.movedSinceConsume[slot]).toBe(0);
+        expect(accumulator.endedSinceConsume[slot]).toBe(0);
+        expect(accumulator.canceledSinceConsume[slot]).toBe(0);
         expect(state.visibleTouchCount).toBe(1);
         expect(state.touchX[slot]).toBe(10);
         expect(state.touchY[slot]).toBe(10);
@@ -671,17 +671,17 @@ describe("integration invariant tests", () => {
     it("movement across frames produces correct frame delta", () => {
         // Arrange
         const id: number = 4;
-        writeTouchDown(buffer, id, 10, 10);
+        writeTouchDown(accumulator, id, 10, 10);
         beginInputFrame(world, 0);
         endInputFrame(world, 0);
 
-        writeTouchMove(buffer, id, 20, 15);
+        writeTouchMove(accumulator, id, 20, 15);
 
         // Act
         beginInputFrame(world, 0);
 
         // Assert
-        const slot: number = findInBuffer(buffer, id);
+        const slot: number = findInBuffer(accumulator, id);
         expect(state.prevX[slot]).toBe(10);
         expect(state.prevY[slot]).toBe(10);
         expect(state.touchX[slot]).toBe(20);
@@ -696,20 +696,20 @@ describe("integration invariant tests", () => {
         // Arrange
         const id1: number = 4;
         const id2: number = 2;
-        writeTouchDown(buffer, id1, 10, 10);
-        writeTouchUp(buffer, id1, 10, 10);
-        const slot: number = findInBuffer(buffer, id1);
+        writeTouchDown(accumulator, id1, 10, 10);
+        writeTouchUp(accumulator, id1, 10, 10);
+        const slot: number = findInBuffer(accumulator, id1);
         beginInputFrame(world, 0);
         endInputFrame(world, 0);
 
         // Act
-        writeTouchDown(buffer, id2, 50, 50);
+        writeTouchDown(accumulator, id2, 50, 50);
 
         // Assert
-        expect(buffer.touchId[slot]).toBe(id2);
-        expect(buffer.beganThisFrame[slot]).toBe(1);
-        expect(buffer.touchX[slot]).toBe(50);
-        expect(buffer.touchY[slot]).toBe(50);
+        expect(accumulator.touchId[slot]).toBe(id2);
+        expect(accumulator.beganSinceConsume[slot]).toBe(1);
+        expect(accumulator.touchX[slot]).toBe(50);
+        expect(accumulator.touchY[slot]).toBe(50);
     });
 
     /*
@@ -720,26 +720,26 @@ describe("integration invariant tests", () => {
         // Arrange
         const id1: number = 4;
         const id2: number = 2;
-        writeTouchDown(buffer, id1, 10, 10);
-        writeTouchDown(buffer, id2, 100, 100);
-        const slot1: number = findInBuffer(buffer, id1);
-        const slot2: number = findInBuffer(buffer, id2);
+        writeTouchDown(accumulator, id1, 10, 10);
+        writeTouchDown(accumulator, id2, 100, 100);
+        const slot1: number = findInBuffer(accumulator, id1);
+        const slot2: number = findInBuffer(accumulator, id2);
         beginInputFrame(world, 0);
         endInputFrame(world, 0);
 
-        writeTouchMove(buffer, id1, 20, 10);
-        writeTouchUp(buffer, id2, 100, 100);
+        writeTouchMove(accumulator, id1, 20, 10);
+        writeTouchUp(accumulator, id2, 100, 100);
 
         // Act #1
         beginInputFrame(world, 0);
 
         // Assert #1 (mid frame)
-        expect(buffer.movedThisFrame[slot1]).toBe(1);
-        expect(buffer.endedThisFrame[slot1]).toBe(0);
-        expect(buffer.touchX[slot1]).toBe(20);
+        expect(accumulator.movedSinceConsume[slot1]).toBe(1);
+        expect(accumulator.endedSinceConsume[slot1]).toBe(0);
+        expect(accumulator.touchX[slot1]).toBe(20);
 
-        expect(buffer.movedThisFrame[slot2]).toBe(0);
-        expect(buffer.endedThisFrame[slot2]).toBe(1);
+        expect(accumulator.movedSinceConsume[slot2]).toBe(0);
+        expect(accumulator.endedSinceConsume[slot2]).toBe(1);
         expect(state.visibleTouchCount).toBe(2);
 
         // Act #2
@@ -748,8 +748,8 @@ describe("integration invariant tests", () => {
         // Assert #2
         expect(state.touchVisible[slot1]).toBe(1);
         expect(state.touchVisible[slot2]).toBe(0);
-        expect(buffer.touchId[slot1]).toBe(id1);
-        expect(buffer.touchId[slot2]).toBe(-1);
+        expect(accumulator.touchId[slot1]).toBe(id1);
+        expect(accumulator.touchId[slot2]).toBe(-1);
         expect(state.visibleTouchCount).toBe(1);
     });
 
@@ -761,13 +761,13 @@ describe("integration invariant tests", () => {
 
         // Arrange
         const id: number = 4;
-        writeTouchDown(buffer, id, 10, 10);
-        writeTouchUp(buffer, id, 10, 10);
-        const slot: number = findInBuffer(buffer, id);
+        writeTouchDown(accumulator, id, 10, 10);
+        writeTouchUp(accumulator, id, 10, 10);
+        const slot: number = findInBuffer(accumulator, id);
 
-        expect(buffer.touchId[slot]).toBe(id);
-        expect(buffer.beganThisFrame[slot]).toBe(1);
-        expect(buffer.endedThisFrame[slot]).toBe(1);
+        expect(accumulator.touchId[slot]).toBe(id);
+        expect(accumulator.beganSinceConsume[slot]).toBe(1);
+        expect(accumulator.endedSinceConsume[slot]).toBe(1);
 
         // Act
         beginInputFrame(world, 0);
@@ -783,16 +783,16 @@ describe("integration invariant tests", () => {
     it("visibleTouchCount counts engine-visible touches, not only physically-down touches", () => {
         // Arrange
         const id: number = 4;
-        writeTouchDown(buffer, id, 10, 10);
-        writeTouchUp(buffer, id, 10, 10);
-        const slot: number = findInBuffer(buffer, id);
+        writeTouchDown(accumulator, id, 10, 10);
+        writeTouchUp(accumulator, id, 10, 10);
+        const slot: number = findInBuffer(accumulator, id);
 
         // Act
         beginInputFrame(world, 0);
 
         // Assert
         expect(state.visibleTouchCount).toBe(1);
-        expect(state.endedThisFrame[slot]).toBe(1)
+        expect(state.endedThisTick[slot]).toBe(1)
         /* Meaning:
          *   The finger is no longer physically down,
          *   but the touch is still visible to gameplay for this frame.

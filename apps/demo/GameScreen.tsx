@@ -16,7 +16,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import {
     createFlatWorld,
     createComponentPool,
-    createTouchBuffer,
+    createTouchAccumulator,
     createTouchState,
     createBeginInputFrame,
     createEndInputFrame,
@@ -27,7 +27,7 @@ import {
     findInBuffer,
     MAX_TOUCHES,
     SpriteAtlasLookup,
-    TouchEventBuffer,
+    TouchInputAccumulator,
 } from '@engine/kernel';
 import {createSpriteAtlasLookup, FRAME_SIZE} from './sprites';
 
@@ -120,7 +120,7 @@ export function GameScreen() {
             world.registerPool(spritePool);
 
             // ── Touch input: raw event buffer (gesture-written) → cooked state ──
-            const touchBuffer = createTouchBuffer();
+            const touchAccumulator = createTouchAccumulator();
             const touchState = createTouchState();
 
             const GRAVITY = 980;       // px/s²
@@ -254,7 +254,7 @@ export function GameScreen() {
             };
 
             // TouchSpec contract: beginInputFrame FIRST, endInputFrame LAST
-            world.addSystem(createBeginInputFrame(touchBuffer, touchState));
+            world.addSystem(createBeginInputFrame(touchAccumulator, touchState));
             world.addSystem(gravitySystem);
             world.addSystem(collisionSystem);
             world.addSystem(fingerSystem);
@@ -265,7 +265,7 @@ export function GameScreen() {
             const { system: renderSystem, buffer } =
                 world.createRenderCollectionSystem(spritePool, spriteType, atlas);
             world.addSystem(renderSystem);
-            world.addSystem(createEndInputFrame(touchBuffer, touchState));
+            world.addSystem(createEndInputFrame(touchAccumulator, touchState));
 
             // Spawn initial sprites
             const root = world.root;
@@ -294,7 +294,7 @@ export function GameScreen() {
 
             g[ENGINE_ID] = {
                 world, spritePool, spriteType, buffer, vx, vy,
-                handles, perf, root, touchBuffer, touchState,
+                handles, perf, root, touchBuffer: touchAccumulator, touchState,
             };
         }
 
@@ -388,7 +388,7 @@ export function GameScreen() {
         targetSpriteCount.value = newCount;
     };
 
-    // ─── Touch producer: gesture events → TouchEventBuffer ────────────────
+    // ─── Touch producer: gesture events → TouchInputAccumulator ───────────
     // Runs on the UI runtime, same as the frame loop. Guards: events before
     // engine bootstrap are dropped; move/up/cancel for unknown ids are dropped
     // (writeTouch* throw on unknown ids by contract); a down with no free slot
@@ -398,7 +398,7 @@ export function GameScreen() {
             'worklet';
             const engine = (globalThis as any)[ENGINE_ID];
             if (engine) {
-                const buf: TouchEventBuffer = engine.touchBuffer;
+                const buf: TouchInputAccumulator = engine.touchBuffer;
                 for (let i = 0; i < e.changedTouches.length; i++) {
                     const t = e.changedTouches[i];
                     if (findInBuffer(buf, t.id) === -1 && findInBuffer(buf, -1) !== -1) {
@@ -412,7 +412,7 @@ export function GameScreen() {
             'worklet';
             const engine = (globalThis as any)[ENGINE_ID];
             if (!engine) return;
-            const buf: TouchEventBuffer = engine.touchBuffer;
+            const buf: TouchInputAccumulator = engine.touchBuffer;
             for (let i = 0; i < e.changedTouches.length; i++) {
                 const t = e.changedTouches[i];
                 if (findInBuffer(buf, t.id) !== -1) {
@@ -424,7 +424,7 @@ export function GameScreen() {
             'worklet';
             const engine = (globalThis as any)[ENGINE_ID];
             if (engine) {
-                const buf: TouchEventBuffer = engine.touchBuffer;
+                const buf: TouchInputAccumulator = engine.touchBuffer;
                 for (let i = 0; i < e.changedTouches.length; i++) {
                     const t = e.changedTouches[i];
                     if (findInBuffer(buf, t.id) !== -1) {
@@ -440,7 +440,7 @@ export function GameScreen() {
             'worklet';
             const engine = (globalThis as any)[ENGINE_ID];
             if (!engine) return;
-            const buf: TouchEventBuffer = engine.touchBuffer;
+            const buf: TouchInputAccumulator = engine.touchBuffer;
             for (let i = 0; i < e.changedTouches.length; i++) {
                 const t = e.changedTouches[i];
                 if (findInBuffer(buf, t.id) !== -1) {
