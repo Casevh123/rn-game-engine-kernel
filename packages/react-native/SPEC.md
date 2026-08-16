@@ -110,7 +110,7 @@ The render collection system applies pivot correction during the gather operatio
 ### Architecture (as implemented)
 
 ```
-Gesture.Manual() → TouchEventBuffer (raw events) → beginInputFrame (cook) → TouchState → [user systems read]
+Gesture.Manual() → TouchInputAccumulator (raw events) → beginInputFrame (cook) → TouchState → [user systems read]
      ↑ plumbing writes via writeTouch*              ↑ first system                        ↑ query layer (unbuilt)
                                                     endInputFrame (last system) clears transient flags, frees ended slots
 ```
@@ -119,7 +119,7 @@ All on the UI thread. No bridge, no serialization.
 
 ### Two buffers, not one
 
-- **`TouchEventBuffer`** — raw facts written by the gesture side via the producer interface (`writeTouchDown/Move/Up/Cancel`). Fixed `MAX_TOUCHES = 10` slots; overflow throws. Phase is represented as **per-frame boolean flag arrays** (`beganThisFrame`, `movedThisFrame`, `endedThisFrame`, `canceledThisFrame`) — events, not a phase enum or state machine.
+- **`TouchInputAccumulator`** — raw facts written by the gesture side via the producer interface (`writeTouchDown/Move/Up/Cancel`). Fixed `MAX_TOUCHES = 10` slots; overflow throws. Phase is represented as **since-consume boolean flag arrays** (`beganSinceConsume`, `movedSinceConsume`, `endedSinceConsume`, `canceledSinceConsume`) — accumulated facts, not a phase enum or ordered event queue.
 - **`TouchState`** — the cooked per-frame snapshot gameplay systems read: current position, start position/time, previous-frame position (for deltas), visibility flags, `visibleTouchCount`.
 
 ### Frame bookends (kernel systems)
@@ -129,7 +129,7 @@ All on the UI thread. No bridge, no serialization.
 
 ### Gesture Source (demonstrated in the demo; package extraction is todo 3.3)
 
-`Gesture.Manual()` wraps `<Canvas>` via `<GestureDetector>`. Four raw callbacks (`onTouchesDown`, `onTouchesMove`, `onTouchesUp`, `onTouchesCancelled`) call `writeTouch*` on the `TouchEventBuffer` — same thread, synchronous. The producer guards its writes: events arriving before engine bootstrap are dropped, as are move/up/cancel events for unknown ids and downs that would exceed `MAX_TOUCHES` (the kernel write functions throw on contract violations by design).
+`Gesture.Manual()` wraps `<Canvas>` via `<GestureDetector>`. Four raw callbacks (`onTouchesDown`, `onTouchesMove`, `onTouchesUp`, `onTouchesCancelled`) call `writeTouch*` on the `TouchInputAccumulator` — same thread, synchronous. The producer guards its writes: events arriving before engine bootstrap are dropped, as are move/up/cancel events for unknown ids and downs that would exceed `MAX_TOUCHES` (the kernel write functions throw on contract violations by design).
 
 ### Query layer (kernel side — todo 2.1, unbuilt)
 
@@ -161,7 +161,7 @@ useFrameCallback((frame) => {
 Order matters. Recommended:
 
 ```
-1. beginInputFrame      ← cook TouchEventBuffer into TouchState
+1. beginInputFrame      ← cook TouchInputAccumulator into TouchState
 2. [user systems]       ← read TouchState, update game state
 3. TransformPropagation ← compose world transforms
 4. RenderCollection     ← gather visible sprites into RenderBuffer
@@ -182,7 +182,7 @@ Driven by `useFrameCallback` (react-native-reanimated). Each frame:
 
 ### What the plumbing guarantees to the kernel
 
-- TouchEventBuffer is populated before `beginInputFrame` runs (gesture callbacks fire between frames on the UI thread; same-thread execution means writes never interleave with a running `step()`)
+- TouchInputAccumulator is populated before `beginInputFrame` runs (gesture callbacks fire between frames on the UI thread; same-thread execution means writes never interleave with a running `step()`)
 - `world.step(dt)` is called exactly once per frame
 - `dt` is derived from `useFrameCallback`'s `frame.timeSincePreviousFrame`
 

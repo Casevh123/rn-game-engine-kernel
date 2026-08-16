@@ -60,7 +60,7 @@ The kernel is where the interesting work is:
 - **Invariant-driven design** — the `worldEnabled` flag (enabled ∧ all ancestors enabled ∧ root-reachable) is specified as a transition matrix ([NewWorldInvariant.md](packages/kernel/working_docs/NewWorldInvariant.md)) and enforced across every mutation path.
 - **Deferred command buffer** — structural mutations (destroy, attach, detach) are illegal mid-`step()` and enforced at runtime; systems queue them instead.
 - **Closure-factory architecture, no classes** — worklet serialization strips prototype chains, so every module is a factory returning a plain object over closure state. This constraint shaped the entire codebase.
-- **Two-buffer input pipeline** — raw touch events accumulate in a ring buffer, cooked into per-frame `TouchState` by begin/end-frame systems, per a written contract ([TouchSpec.md](packages/kernel/working_docs/TouchSpec.md)).
+- **Two-buffer input pipeline** — raw touch events coalesce in a per-touch accumulator, cooked into per-frame `TouchState` by begin/end-frame systems, per a written contract ([TouchSpec.md](packages/kernel/working_docs/TouchSpec.md)).
 - **Tested at the contract level** — 258 tests targeting the specified invariants (handle staleness, swap-and-pop integrity, enable-state transitions, command-buffer guards), not just happy paths.
 
 ## Authorship and AI use

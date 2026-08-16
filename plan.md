@@ -43,7 +43,7 @@ Other deliberate constraints: fixed world capacity (no paging/growth), uniform-s
 
 ### Kernel — solid core, known debts
 
-**Built and tested (258 tests, 13 suites):** SoA storage with intrusive free-list · generational handles · scene graph with O(1) attach/detach/reparent and iterative destroy · worldEnabled invariant (enabled ∧ ancestors-enabled ∧ root-reachable, per [NewWorldInvariant.md](packages/kernel/working_docs/NewWorldInvariant.md)) enforced across all mutations · sparse-set component pools with swap-and-pop · deferred command buffer with step guards · RSXform transform propagation · atlas-aware render collection with pivot correction · two-buffer touch input (raw `TouchEventBuffer` → cooked `TouchState`, begin/end frame systems, per [TouchSpec.md](packages/kernel/working_docs/TouchSpec.md)).
+**Built and tested (258 tests, 13 suites):** SoA storage with intrusive free-list · generational handles · scene graph with O(1) attach/detach/reparent and iterative destroy · worldEnabled invariant (enabled ∧ ancestors-enabled ∧ root-reachable, per [NewWorldInvariant.md](packages/kernel/working_docs/NewWorldInvariant.md)) enforced across all mutations · sparse-set component pools with swap-and-pop · deferred command buffer with step guards · RSXform transform propagation · atlas-aware render collection with pivot correction · two-buffer touch input (raw `TouchInputAccumulator` → cooked `TouchState`, begin/end frame systems, per [TouchSpec.md](packages/kernel/working_docs/TouchSpec.md)).
 
 **Known debts (Phase 1 of todo.md; Phase 0 is complete):**
 - Component pools swap only the columns their author remembered — parallel user columns silently desync on non-tail removal. The single latent-corruption bug in the design. (The demo now hand-swaps all its columns; the API still permits the mistake.)
@@ -53,7 +53,7 @@ Other deliberate constraints: fixed world capacity (no paging/growth), uniform-s
 
 ### Input — pipeline proven on-device, query layer missing
 
-The event pipeline exists, is well-tested (54 tests), and as of 2026-08-06 runs end-to-end on device: the demo's `Gesture.Manual()` worklets write the `TouchEventBuffer`, the begin/end-frame systems cook it, and a finger-collider system consumes `TouchState`. What a game developer actually calls — delta/velocity/tap/drag queries — still does not exist (todo 2.1), and the gesture wiring lives hand-rolled in the demo rather than in `@engine/react-native` (todo 3.3).
+The event pipeline exists, is well-tested (54 tests), and as of 2026-08-06 runs end-to-end on device: the demo's `Gesture.Manual()` worklets write the `TouchInputAccumulator`, the begin/end-frame systems cook it, and a finger-collider system consumes `TouchState`. What a game developer actually calls — delta/velocity/tap/drag queries — still does not exist (todo 2.1), and the gesture wiring lives hand-rolled in the demo rather than in `@engine/react-native` (todo 3.3).
 
 ### `@engine/react-native` — **empty**
 

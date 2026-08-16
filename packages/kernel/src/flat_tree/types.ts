@@ -121,15 +121,15 @@ export interface SpriteAtlasLookup {
     readonly pivotYs: Float32Array;
 }
 
-export interface TouchEventBuffer {
+export interface TouchInputAccumulator {
     readonly touchX:             Float32Array;   // [MAX_TOUCHES]
     readonly touchY:             Float32Array;   // [MAX_TOUCHES]
-    readonly beginX:             Float32Array;   // [MAX_TOCHES]
+    readonly beginX:             Float32Array;   // [MAX_TOUCHES]
     readonly beginY:             Float32Array;   // [MAX_TOUCHES]
-    readonly beganThisFrame:     Uint8Array;     // [MAX_TOUCHES] boolean
-    readonly movedThisFrame:     Uint8Array;     // [MAX_TOUCHES] boolean
-    readonly endedThisFrame:     Uint8Array;     // [MAX_TOUCHES] boolean
-    readonly canceledThisFrame:  Uint8Array;     // [MAX_TOUCHES] boolean
+    readonly beganSinceConsume:     Uint8Array;     // [MAX_TOUCHES] boolean
+    readonly movedSinceConsume:     Uint8Array;     // [MAX_TOUCHES] boolean
+    readonly endedSinceConsume:     Uint8Array;     // [MAX_TOUCHES] boolean
+    readonly canceledSinceConsume:  Uint8Array;     // [MAX_TOUCHES] boolean
     readonly touchId:            Int32Array;     // [MAX_TOUCHES]
 }
 
@@ -141,10 +141,10 @@ export interface TouchState {
     readonly startTime:    Float32Array;  // world time when BEGAN (seconds)
     readonly prevX:        Float32Array;  // position last frame
     readonly prevY:        Float32Array;
-    readonly beganThisFrame:     Uint8Array;     // [MAX_TOUCHES] boolean
-    readonly movedThisFrame:     Uint8Array;     // [MAX_TOUCHES] boolean
-    readonly endedThisFrame:     Uint8Array;     // [MAX_TOUCHES] boolean
-    readonly canceledThisFrame:  Uint8Array;     // [MAX_TOUCHES] boolean
+    readonly beganThisTick:     Uint8Array;     // [MAX_TOUCHES] boolean
+    readonly movedThisTick:     Uint8Array;     // [MAX_TOUCHES] boolean
+    readonly endedThisTick:     Uint8Array;     // [MAX_TOUCHES] boolean
+    readonly canceledThisTick:  Uint8Array;     // [MAX_TOUCHES] boolean
     readonly touchVisible:            Uint8Array;     // [MAX_TOUCHES]
 
     visibleTouchCount:   number;

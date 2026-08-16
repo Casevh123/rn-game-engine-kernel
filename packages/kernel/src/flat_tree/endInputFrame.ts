@@ -1,17 +1,17 @@
-import {FlatWorld, TouchEventBuffer, System, TouchState} from "./types";
+import {FlatWorld, TouchInputAccumulator, System, TouchState} from "./types";
 import {MAX_TOUCHES} from "./constants";
 
-function clearTouchEventSlot(buffer: TouchEventBuffer, idx: number): void {
+function clearTouchEventSlot(accumulator: TouchInputAccumulator, idx: number): void {
     'worklet';
-    buffer.touchX[idx] = 0;
-    buffer.touchY[idx] = 0;
-    buffer.beginX[idx] = 0;
-    buffer.beginY[idx] = 0;
-    buffer.beganThisFrame[idx] = 0;
-    buffer.movedThisFrame[idx] = 0;
-    buffer.endedThisFrame[idx] = 0;
-    buffer.canceledThisFrame[idx] = 0;
-    buffer.touchId[idx] = -1;
+    accumulator.touchX[idx] = 0;
+    accumulator.touchY[idx] = 0;
+    accumulator.beginX[idx] = 0;
+    accumulator.beginY[idx] = 0;
+    accumulator.beganSinceConsume[idx] = 0;
+    accumulator.movedSinceConsume[idx] = 0;
+    accumulator.endedSinceConsume[idx] = 0;
+    accumulator.canceledSinceConsume[idx] = 0;
+    accumulator.touchId[idx] = -1;
 }
 
 function clearTouchStateSlot(state: TouchState, idx: number): void {
@@ -23,41 +23,41 @@ function clearTouchStateSlot(state: TouchState, idx: number): void {
     state.startTime[idx] = 0;
     state.prevX[idx] = 0;
     state.prevY[idx] = 0;
-    state.beganThisFrame[idx] = 0;
-    state.movedThisFrame[idx] = 0;
-    state.endedThisFrame[idx] = 0;
-    state.canceledThisFrame[idx] = 0;
+    state.beganThisTick[idx] = 0;
+    state.movedThisTick[idx] = 0;
+    state.endedThisTick[idx] = 0;
+    state.canceledThisTick[idx] = 0;
     state.touchVisible[idx] = 0;
 }
 
-export function createEndInputFrame(buffer: TouchEventBuffer, state: TouchState): System {
+export function createEndInputFrame(accumulator: TouchInputAccumulator, state: TouchState): System {
     'worklet';
     return (world: FlatWorld, dt: number): void => {
         for (let i: number = 0; i < MAX_TOUCHES; i++) {
-            if (buffer.touchId[i] === -1){
+            if (accumulator.touchId[i] === -1){
                 continue;
             }
 
             const finished =
-                buffer.endedThisFrame[i] ||
-                buffer.canceledThisFrame[i];
+                accumulator.endedSinceConsume[i] ||
+                accumulator.canceledSinceConsume[i];
 
             if (finished) {
-                clearTouchEventSlot(buffer, i);
+                clearTouchEventSlot(accumulator, i);
                 clearTouchStateSlot(state, i);
                 state.visibleTouchCount--;
                 continue;
             }
 
-            buffer.beganThisFrame[i] = 0;
-            buffer.movedThisFrame[i] = 0;
-            buffer.endedThisFrame[i] = 0;
-            buffer.canceledThisFrame[i] = 0;
+            accumulator.beganSinceConsume[i] = 0;
+            accumulator.movedSinceConsume[i] = 0;
+            accumulator.endedSinceConsume[i] = 0;
+            accumulator.canceledSinceConsume[i] = 0;
 
-            state.beganThisFrame[i] = 0;
-            state.movedThisFrame[i] = 0;
-            state.endedThisFrame[i] = 0;
-            state.canceledThisFrame[i] = 0;
+            state.beganThisTick[i] = 0;
+            state.movedThisTick[i] = 0;
+            state.endedThisTick[i] = 0;
+            state.canceledThisTick[i] = 0;
         }
     }
 }
